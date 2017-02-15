@@ -693,8 +693,8 @@ void setup()
   //Timer5.initialize(500000); // May use later...
   //Timer5.attachInterrupt(callback function of some use...);
   while (!Serial); // for Leonardo/Micro/Zero
-
-  Serial.begin(2000000);
+   Serial.begin(250000);
+  //Serial.begin(2000000);
    //Serial.begin(500000);
   //Serial.begin(1000000);// Works!
   //Serial.begin(2000000);// Works too!  Holy Cow!
@@ -947,12 +947,11 @@ void loop()
   {
      temp1 = ReadTemperature(CSs[0]);
      temp2 = ReadTemperature(CSs[1]);
-         temp1 = ReadTemperature(CSs[0]);
-     temp2 = ReadTemperature(CSs[1]);
-     temp3 = ReadTemperature(CSs[1]);
-     temp4 = ReadTemperature(CSs[1]);
-     temp5 = ReadTemperature(CSs[1]);
-     temp6 = ReadTemperature(CSs[1]);
+     temp3 = ReadTemperature(CSs[2]);
+     temp4 = ReadTemperature(CSs[3]);
+     temp5 = ReadTemperature(CSs[4]);
+     temp6 = ReadTemperature(CSs[5]);
+ 
     if(temp1>=90){  // Shut down if control temp > 90 degrees C.
       Timer3.pwm(HEATER_PIN, 0);//Set DC to zero!
       noInterrupts();
@@ -970,7 +969,14 @@ void loop()
        Serial.print('\t');
        Serial.print(temp2);
        Serial.print('\t');
-       Serial.print(DC);
+       //Serial.print(DC);
+       Serial.print(temp3);
+        Serial.print('\t');
+        Serial.print(temp4);
+        Serial.print('\t');
+        Serial.print(temp5);
+        Serial.print('\t');
+        Serial.print(temp6);
        Serial.print('\n');
   //     }
      
