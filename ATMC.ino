@@ -98,6 +98,7 @@ year = {2017}}
 ///////// Globals ////////////.
 // These control the data acquisition rate from 200 ms to 1 s:
 double updateIntervals[] = {100.0,200.0,300.0,400.0,500.0,600.0,700.0,800.0, 900.0, 1000.0};
+double *updateIntPtr = updateIntervals;
 volatile char inbuff[200];
 volatile char *inbuffPtr = inbuff;
 volatile unsigned int InputBufferIndex;
@@ -300,7 +301,6 @@ void ReadData(void)
 
   void WriteRegister(int Pin, byte Register, byte Value) {
     byte Address = Register | 0x80; //Set bit 7 high for a write command
-    Serial.print("I'm in WriteRegister");
     digitalWrite(Pin, LOW);
     NOP;
     SPI.transfer(Address);
@@ -380,15 +380,13 @@ void InitializeChannel(int Pin) {
   Serial.print("Initializing channel on pin ");
   Serial.println(Pin);
   for (int i = 0; i < NUM31856REGs; i++) {
-    Serial.print("In the for loop\n");
     WriteRegister(Pin, i, RegisterValues[i]);
   }
   //Serial.print("Finished in Initialize Channel\n");  
 }
 
 void VerifyData(int CS) {
-    int ErrorCount = 0;
-     Serial.print("In VerifyData\n");  
+    int ErrorCount = 0; 
   for (int i = 0; i < NUM31856REGs; i++) {
     byte RegVal = ReadSingleRegister(CS, i);
     if(RegVal != RegisterValues[i]){
@@ -443,7 +441,7 @@ void PID_Control(void)
   if (ierr >= 250.0) ierr = 250.0;// Saturate integral error for anti-windup.
   if (ierr <= -250.0) ierr = -250.0;
   Err[1] = Err[0];
-  DC = Kp*Err[0]+Ki*ierr*Ts+Kd*derr/Ts;
+  DC = pidGains.Kp*Err[0]+pidGains.Ki*ierr*Ts+pidGains.Kd*derr/Ts;
   iDC = (int)DC;// Cast to int
   if(iDC >= 1023)iDC = 1023;
   if(iDC <= 0)iDC = 0;
@@ -527,7 +525,7 @@ if(*inbuffPtr == 's'){
         *inbuffPtr++;//Increment buffer pointer.
         i++;
      }
-     if(i = 1)Interval = (unsigned int)atoi(dataStr);//Prevent invalid intervals.
+     Interval = (unsigned int)atoi(dataStr);//Prevent invalid intervals.
    }//End else
 }// End if s
 
@@ -655,9 +653,6 @@ if(*inbuffPtr=='t'){//Time functions
       if(kpSet){
       
         kpStr[i] = *inbuffPtr;
-        Serial.print("Kp digit = ");
-        Serial.print(kpStr[i]);
-        Serial.print("\n");
         kiSet = false;
         kdSet = false;
         i++;
@@ -677,7 +672,7 @@ if(*inbuffPtr=='t'){//Time functions
 void setup()
 {
   
-  Ts = updateIntervals[1]/1000.0;// Set default sampling rate.
+  //Ts = updateIntervals[1]/1000.0;// Set default sampling rate.
   // put your setup code here, to run once:
   pinMode(DATAREAD_LED, OUTPUT);//Set the data-read activity LED pin to output.
   digitalWrite(DATAREAD_LED,false);
