@@ -452,7 +452,7 @@ void WriteToSD(void)
 {
       
 
-    dataString +=ttime+comma+temp1+comma+temp2;
+    dataString +=ttime+comma+temp1+comma+temp2+comma+temp3+comma+temp4+comma+temp5+comma+temp6;
     logfile.println(dataString);
     dataString = "";
      
