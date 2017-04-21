@@ -207,6 +207,9 @@ const char HelpText[] PROGMEM = {"THC supports the following commands:\r\n \\
     9 --> 1.0 sec\r\n \\
   T# -- Set the x = 0 boundary temperature to # degrees C (currently not implemented)\r\n \\
   thms -- set time where h,m, and s are hours, minutes, seconds integers \r\n \\
+  ty## -- set year where ## are the last two digits \r\n \\
+  tr## -- set month where ## are the digits of the month \r\n \\
+  td## -- set day \r\n \\
   tt -- Show the current time.\r\n\ \\
   gg -- Report current PID gains.\r\n \\
   gp#i#d# -- Set PID gains, where # denotes floating point numbers.\r\n \\
@@ -537,7 +540,7 @@ if(*inbuffPtr == 's'){
         *inbuffPtr++;//Increment buffer pointer.
         i++;
      }
-     Interval = (unsigned int)atoi(dataStr);//Prevent invalid intervals.
+     Interval = (unsigned int)atoi(dataStr);//
    }//End else
 }// End if s
 
