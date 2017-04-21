@@ -459,9 +459,9 @@ void PID_Control(void)
 
 void WriteToSD(void)
 {
-      
+     //Write time, temperatures, and current duty cycle to the SD card. 
 
-    dataString +=ttime+comma+temp1+comma+temp2+comma+temp3+comma+temp4+comma+temp5+comma+temp6;
+    dataString +=ttime+comma+temp1+comma+temp2+comma+temp3+comma+temp4+comma+temp5+comma+temp6+iDC;
     logfile.println(dataString);
     dataString = "";
      
@@ -1067,12 +1067,14 @@ void loop()
        Serial.print('\t');
        //Serial.print(DC);
        Serial.print(temp3);
-        Serial.print('\t');
-        Serial.print(temp4);
-        Serial.print('\t');
-        Serial.print(temp5);
-        Serial.print('\t');
-        Serial.print(temp6);
+       Serial.print('\t');
+       Serial.print(temp4);
+       Serial.print('\t');
+       Serial.print(temp5);
+       Serial.print('\t');
+       Serial.print(temp6);
+       Serial.print('\t');
+       Serial.print(iDC);//Current duty cycle
        Serial.print('\n');
   //     }
      
