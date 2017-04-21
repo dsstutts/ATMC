@@ -113,10 +113,11 @@ char kdStr[10];
 char YearStr[6];
 char MonthStr[6];
 char DayStr[6];
-
+char dcStr[5];
+String *dcStrPtr;
 File DataFile;
 String FileName = "";
-//char dataString[50];
+//char dataString[100];
 String dataString = "";
 String *dataStringPtr;
 String comma = ",";
@@ -180,6 +181,10 @@ boolean pidUpdate = false;
 unsigned int NumDataPoints = 0;
 unsigned long writeSDtime = 0;
 boolean PowerOn = false;
+boolean controlOn = false;//PID control flag.
+boolean openLoop = false;//Open loop flag
+boolean logData = false;//Start saving data flag
+boolean setDC = false;//Manual open loop duty cycle setting flag.
 unsigned int i, j, numPts = 0;
 
 volatile char InChar = '\0'; // serial input character
@@ -461,7 +466,7 @@ void WriteToSD(void)
 {
      //Write time, temperatures, and current duty cycle to the SD card. 
 
-    dataString +=ttime+comma+temp1+comma+temp2+comma+temp3+comma+temp4+comma+temp5+comma+temp6+iDC;
+    dataString +=ttime+comma+temp1+comma+temp2+comma+temp3+comma+temp4+comma+temp5+comma+temp6+comma+iDC;
     logfile.println(dataString);
     dataString = "";
      
@@ -491,7 +496,7 @@ void parseSerialInput(void) {
     byte j = 0;
     byte o = 0;
     byte q = 0;
-    byte p = 0;
+    byte p = 0; 
 //
 // Read the first command character and parse accordingly:
 //
@@ -522,6 +527,31 @@ if(*inbuffPtr == 'a'){//Stop everything and save data.
    allOff = true;
    return;
 }
+
+if(*inbuffPtr == 'C'){
+  
+  setDC = true;
+  openLoop = true;
+  numDataPoints = 0;
+  ttime = 0.0;
+}
+
+if(*inbuffPtr == 'c'){//S.
+    saveData = false;
+   allOff = true;
+   return;
+}
+
+if(*inbuffPtr == 'L'){
+  saveData = true;
+   powerOn = true;
+   readTemp = true;
+   createFile = true;
+   numDataPoints = 0;
+   ttime = 0.0;
+   return;
+}
+
 
 if(*inbuffPtr == 's'){
    *inbuffPtr++;//increment pointer to second character
@@ -682,8 +712,6 @@ if(*inbuffPtr=='t'){//Time functions
               set_Time = false;
               return;
               
-              
-              
             }
     }
      break;
@@ -750,8 +778,25 @@ if(*inbuffPtr=='t'){//Time functions
    }//End PID switch
     *inbuffPtr++;
   }// End PID while
- } // End of if cc
-}// End of if c
+ } // End of if else
+}// End of if g
+
+//Open loop duty cycle setting:
+  if(*inbuffPtr=='C') {//Control Setting case
+    *inbuffPtr++;
+      openLoop = true;
+      setDC = true;
+      while (*inbuffPtr != '\0') {
+   
+      if (((*inbuffPtr >= '0') && (*inbuffPtr <= '9'))||(*inbuffPtr=='.')) {// Make sure they're numeric!
+          dcStr[i] = *inbuffPtr;
+           i++;
+    }//End if numeric
+    *inbuffPtr++;
+  }// End duty cycle set while
+  
+ } // End of if c
+
     
 }// End of parseSerialInput
 
@@ -1091,18 +1136,28 @@ void loop()
      SPI.setDataMode(SPI_MODE3);
      ttime = ttime + Ts;
   }
- if(powerOn){//Safety wrapper around PWM output
-  if(pidUpdate&&saveData)
+
+  if (setDC){
+    iDC = atoi(dcStr);
+    Timer3.pwm(HEATER_PIN, iDC);
+    setDC = false;
+  }
+  
+ //if(powerOn){//Safety wrapper around PWM output
+  if(pidUpdate&&controlOn)
   {
     PID_Control();
     pidUpdate = false;
   }
- }
- else
- Timer3.pwm(HEATER_PIN, 0);//Set DC to zero!
+// }
+ //else
+ //Timer3.pwm(HEATER_PIN, 0);//Set DC to zero!
+
+ 
  
   if(allOff)
   {
+    openLoop = false;
     powerOn = false;
     saveData = false;
     Timer3.pwm(HEATER_PIN, 0);//Set DC to zero!
