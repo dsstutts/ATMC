@@ -220,7 +220,7 @@ const char HelpText[] PROGMEM = {"THC supports the following commands:\r\n \\
   gp#i#d# -- Set PID gains, where # denotes floating point numbers.\r\n \\
   Note that while you may set one or two at a time, you must enter the PID gains and times in order!\r\n \\
   Z -- Not implemented.\r\n\ \\
-  W -- Not implemented.\r\n"};
+  W#### -- Simultaneously set duty cycle and log data, where #### represents the duty cycle from 0 to 1023.\r\n"};
 //12 byte PID gains structure:
 struct PID_Gains{
   double Kp;
@@ -528,13 +528,46 @@ if(*inbuffPtr == 'a'){//Stop everything and save data.
    return;
 }
 
-if(*inbuffPtr == 'C'){
+//Open loop duty cycle setting:
+  if(*inbuffPtr=='C') {//Control Setting case
+    readTemp = true;// Always read temp when power on to shut down if T >= 90 C.
+    setDC = true;
+    openLoop = true;
+    numDataPoints = 0;
+    ttime = 0.0;
+    *inbuffPtr++;
+    openLoop = true;
+    setDC = true;
+    while (*inbuffPtr != '\0') {
+   
+      if (((*inbuffPtr >= '0') && (*inbuffPtr <= '9'))||(*inbuffPtr=='.')) {// Make sure they're numeric!
+          dcStr[i] = *inbuffPtr;
+          i++;
+    }//End if numeric
+    *inbuffPtr++;
+  }// End duty cycle set while
   
-  setDC = true;
-  openLoop = true;
-  numDataPoints = 0;
-  ttime = 0.0;
-}
+ } // End of if C
+
+ //Open loop duty cycle setting with data acquisition:
+  if(*inbuffPtr=='W') {
+    saveData = true;
+    setDC = true;
+    openLoop = true;
+    readTemp = true;
+    createFile = true;
+    numDataPoints = 0;
+    ttime = 0.0;
+    *inbuffPtr++;
+    while (*inbuffPtr != '\0') {
+      if (((*inbuffPtr >= '0') && (*inbuffPtr <= '9'))||(*inbuffPtr=='.')) {// Make sure they're numeric!
+          dcStr[i] = *inbuffPtr;
+          i++;
+    }//End if numeric
+    *inbuffPtr++;
+  }// End duty cycle set while
+  
+ } // End of if W
 
 if(*inbuffPtr == 'c'){//S.
     saveData = false;
@@ -780,24 +813,7 @@ if(*inbuffPtr=='t'){//Time functions
   }// End PID while
  } // End of if else
 }// End of if g
-
-//Open loop duty cycle setting:
-  if(*inbuffPtr=='C') {//Control Setting case
-    *inbuffPtr++;
-      openLoop = true;
-      setDC = true;
-      while (*inbuffPtr != '\0') {
-   
-      if (((*inbuffPtr >= '0') && (*inbuffPtr <= '9'))||(*inbuffPtr=='.')) {// Make sure they're numeric!
-          dcStr[i] = *inbuffPtr;
-           i++;
-    }//End if numeric
-    *inbuffPtr++;
-  }// End duty cycle set while
   
- } // End of if c
-
-    
 }// End of parseSerialInput
 
 ////////////End of Parser////
@@ -1084,6 +1100,14 @@ void loop()
     set_Time = false;   
   }
 
+  if (setDC){
+    iDC = atoi(dcStr);
+    if (iDC < 0)iDC = 0;// Saturate duty cycles below zero or above 1023.
+    if (iDC > 1023) iDC = 1023;
+    Timer3.pwm(HEATER_PIN, iDC);
+    setDC = false;
+  }
+
   if(readTemp)
   {
      temp1 = ReadTemperature(CSs[0]);
@@ -1137,11 +1161,6 @@ void loop()
      ttime = ttime + Ts;
   }
 
-  if (setDC){
-    iDC = atoi(dcStr);
-    Timer3.pwm(HEATER_PIN, iDC);
-    setDC = false;
-  }
   
  //if(powerOn){//Safety wrapper around PWM output
   if(pidUpdate&&controlOn)
@@ -1152,8 +1171,6 @@ void loop()
 // }
  //else
  //Timer3.pwm(HEATER_PIN, 0);//Set DC to zero!
-
- 
  
   if(allOff)
   {
