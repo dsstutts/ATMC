@@ -1117,7 +1117,7 @@ void loop()
      temp5 = ReadTemperature(CSs[4]);
      temp6 = ReadTemperature(CSs[5]);
  
-    if(temp1>=90){  // Shut down if control temp > 90 degrees C.
+    if(temp1>=120){  // Shut down if control temp > 90 degrees C.
       Timer3.pwm(HEATER_PIN, 0);//Set DC to zero!
       noInterrupts();
       logfile.close();
