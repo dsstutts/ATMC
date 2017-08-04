@@ -32,7 +32,7 @@ furnished to do so, subject to the following conditions:
 The above copyright notice and this permission notice shall be included in all
 copies or substantial portions of the Software. 
 
-Acknoledgements:
+Acknowledgements:
 
 I used the MAX31856 SPI code provided by Rx7man on this post:
 https://forum.arduino.cc/index.php?topic=390824.0
