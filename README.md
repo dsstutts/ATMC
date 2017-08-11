@@ -6,7 +6,10 @@ Missouri University of Science and Technology to use Arduino hardware to perform
 ATMC supports the following commands entered at the Arduino input command line:
   A -- Control, acquire and store data
   a -- Stop everything and save data; wait until restart.
+  C# -- Run in open loop with dutycycle #.
+  c -- Cancel open loop and turn off power.
   h -- List of supported commands
+  L -- Log data; use 'a' to stop and save.
   o -- Turn power off
   ss -- Print acquisition rate
   s# -- Set acquisition rate
@@ -30,5 +33,5 @@ ATMC supports the following commands entered at the Arduino input command line:
   gg -- Report current PID gains.
   gp#i#d# -- Set PID gains, where # denotes floating point numbers.
   Note that while you may set one or two at a time, you must enter the PID gains and times in order!
+  W#### -- Simultaneously set duty cycle and log data, where #### represents the duty cycle from 0 to 1023.
   Z -- Not implemented.
-  W -- Not implemented.

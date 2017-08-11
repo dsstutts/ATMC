@@ -195,7 +195,9 @@ const char fileCreateerror[] PROGMEM = "Couldn't create file\n";//Store in progr
 const char HelpText[] PROGMEM = {"THC supports the following commands:\r\n \\
   A -- Control, acquire and store data\r\n \\
   a -- Stop everything and save data; wait until restart.\r\n \\
+  C# -- Run in open loop with dutycycle #.\r\n \\
   h -- List of supported commands\r\n \\
+  L -- Log data; use 'a' to stop and save.\r\n \\
   o -- Turn power off\r\n \\
   ss -- Print acquisition rate\r\n \\
   s# -- Set acquisition rate\r\n \\
