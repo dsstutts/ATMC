@@ -200,7 +200,6 @@ const char HelpText[] PROGMEM = {"THC supports the following commands:\r\n \\
   L -- Log data; use 'a' to stop and save.\r\n \\
   o -- Turn power off\r\n \\
   ss -- Print acquisition rate\r\n \\
-  s# -- Set acquisition rate\r\n \\
   s# -- Set data acquisition interval where # is an integer option denoting:\r\n \\
     0 --> .1 sec (not implemented) \r\n \\  
     1 --> .2 sec\r\n \\
@@ -517,6 +516,7 @@ if(*inbuffPtr == 'A'){//Start controlling temperature and saving data.
    saveData = true;
    powerOn = true;
    pidUpdate = true;
+   controlOn = true;
    readTemp = true;
    createFile = true;
    numDataPoints = 0;
