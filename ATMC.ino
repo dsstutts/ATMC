@@ -1108,6 +1108,10 @@ void loop()
     if (iDC > 1023) iDC = 1023;
     Timer3.pwm(HEATER_PIN, iDC);
     setDC = false;
+    for(i = 0; i < sizeof(dcStr); i++)// Flush dcStr buffer.
+    {
+      dcStr[i] = '\0';
+    }
   }
 
   if(readTemp)
