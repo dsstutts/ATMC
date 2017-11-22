@@ -114,6 +114,7 @@ char YearStr[6];
 char MonthStr[6];
 char DayStr[6];
 char dcStr[5];
+char tempStr[10];
 String *dcStrPtr;
 File DataFile;
 String FileName = "";
@@ -160,11 +161,12 @@ double temp3;
 double temp4;
 double temp5;
 double temp6;
-double SetTemp = 50.0;
+double setTemp = 50.0;// Default target temperature
 double ttime = 0;// Temperature time
 double Ts = 200.0;// Default data acquisition rate.
 double Err[] = {0.0, 0.0, 0.0};//current error, last error, error before last 
 double derr=0.0, ierr=0.0;
+// Set some default gains:
 double Kp = 200.0;
 double DC = 0.0;
 int iDC = 0;
@@ -211,7 +213,7 @@ const char HelpText[] PROGMEM = {"THC supports the following commands:\r\n \\
     7 --> .8 sec\r\n \\
     8 --> .9 sec\r\n \\
     9 --> 1.0 sec\r\n \\
-  T# -- Set the x = 0 boundary temperature to # degrees C (currently not implemented)\r\n \\
+  T# -- Set the x = 0 boundary temperature to # degrees C\r\n \\
   thms -- set time where h,m, and s are hours, minutes, seconds integers \r\n \\
   ty## -- set year where ## are the last two digits \r\n \\
   tr## -- set month where ## are the digits of the month \r\n \\
@@ -449,8 +451,8 @@ void file_err(void)
 void PID_Control(void)
 {  
   
-  //Err[0] = temp1 - SetTemp;//If tracking a cold temp on a Peltier cooler. 
-  Err[0] = SetTemp - temp1;
+  //Err[0] = temp1 - setTemp;//If tracking a cold temp on a Peltier cooler. 
+  Err[0] = setTemp - temp1;
   derr = Err[0]-Err[1];
   ierr = ierr + Err[0];
   if (ierr >= 250.0) ierr = 250.0;// Saturate integral error for anti-windup.
@@ -490,7 +492,7 @@ void parseSerialInput(void) {
     boolean kdSet = false;
     char dataStr[2] = {'\0','\0'};
     unsigned int data = 0;
-    double SetTemp;
+    double setTemp;
     byte i = 0;
     byte k = 0;
     byte l = 0;
@@ -512,7 +514,7 @@ if(*inbuffPtr == 'o'){// Turn off power, but still log data.
   return;
 }
 
-if(*inbuffPtr == 'A'){//Start controlling temperature and saving data.
+if(*inbuffPtr == 'A'){//Start controlling default temperature and saving data.
    saveData = true;
    powerOn = true;
    pidUpdate = true;
@@ -530,6 +532,28 @@ if(*inbuffPtr == 'a'){//Stop everything and save data.
    return;
 }
 
+// Set target temperature and log data:
+if(*inbuffPtr == 'T'){
+   saveData = true;
+   powerOn = true;
+   pidUpdate = true;
+   controlOn = true;
+   readTemp = true;
+   createFile = true;
+   numDataPoints = 0;
+   ttime = 0.0;
+   while (*inbuffPtr != '\0') {
+      if (((*inbuffPtr >= '0') && (*inbuffPtr <= '9'))||(*inbuffPtr=='.')) {// Make sure they're numeric!
+          tempStr[i] = *inbuffPtr;
+          i++;
+      }//End if numeric
+      *inbuffPtr++;
+    }// End duty cycle set while
+    setTemp = atof(tempStr);//convert to float
+    for (j = 0; j<sizeof(tempStr); j++)tempStr[j] = '\0';//Flush buffer
+  return;
+}
+
 //Open loop duty cycle setting:
   if(*inbuffPtr=='C') {//Control Setting case
     readTemp = true;// Always read temp when power on to shut down if T >= 90 C.
@@ -541,14 +565,13 @@ if(*inbuffPtr == 'a'){//Stop everything and save data.
     openLoop = true;
     setDC = true;
     while (*inbuffPtr != '\0') {
-   
       if (((*inbuffPtr >= '0') && (*inbuffPtr <= '9'))||(*inbuffPtr=='.')) {// Make sure they're numeric!
           dcStr[i] = *inbuffPtr;
           i++;
-    }//End if numeric
-    *inbuffPtr++;
-  }// End duty cycle set while
-  
+      }//End if numeric
+      *inbuffPtr++;
+    }// End duty cycle set while
+   return;
  } // End of if C
 
  //Open loop duty cycle setting with data acquisition:
@@ -568,7 +591,7 @@ if(*inbuffPtr == 'a'){//Stop everything and save data.
     }//End if numeric
     *inbuffPtr++;
   }// End duty cycle set while
-  
+   return;
  } // End of if W
 
 if(*inbuffPtr == 'c'){//S.
@@ -577,7 +600,7 @@ if(*inbuffPtr == 'c'){//S.
    return;
 }
 
-if(*inbuffPtr == 'L'){
+if(*inbuffPtr == 'L'){//Just start logging data
   saveData = true;
    powerOn = true;
    readTemp = true;
@@ -1123,7 +1146,7 @@ void loop()
      temp5 = ReadTemperature(CSs[4]);
      temp6 = ReadTemperature(CSs[5]);
  
-    if(temp1>=120){  // Shut down if control temp > 90 degrees C.
+    if(temp1>=120){  // Shut down if control temp > 120 degrees C.
       Timer3.pwm(HEATER_PIN, 0);//Set DC to zero!
       noInterrupts();
       logfile.close();
