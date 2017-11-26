@@ -109,8 +109,8 @@ year = {2017}}
 #define NUM31856REGs 10// Number of special function registers on the MAX31856
 #define TYPE_K 0x03
 #define TYPE_T 0x07
-#define NOP __asm__ __volatile__ ("nop");// Inline no-operation ASM for MAX31856 SPI communication.
-#define DATAREAD_LED 11
+#define NOP __asm__ __volatile__ ("nop");// Inline no-operation ASM for inserting a 62.5 ns delay used
+#define DATAREAD_LED 11//                 for MAX31856 SPI communication and for H-bridge deadtime. 
 ////////////////////////////////
 
 ///////// Globals ////////////.
@@ -482,12 +482,14 @@ void pidHBcontrol()
   if(iDC < 0){//Set DC for negative error:
     Timer3.pwm(PWM_PIN_B, 0);
     NOP // Make sure phase B is completely off!
+    NOP
     Timer3.pwm(PWM_PIN_A, iDC);// Reads low 10 bits, so sign doesn't matter.
   }
   else
   { // Positive error case:
     Timer3.pwm(PWM_PIN_A, 0);
     NOP // Make sure phase A is completely off!
+    NOP
     Timer3.pwm(PWM_PIN_B, iDC);
   }
 }
@@ -1182,12 +1184,14 @@ void loop()
   {// Cooling case
     Timer3.pwm(PWM_PIN_A, 0);
     NOP // Make sure phase A is completely off!
+    NOP
     Timer3.pwm(PWM_PIN_B, iDC);// Reads low 10 bits, so sign doesn't matter.
   }
   else
   { // Heating case:
     Timer3.pwm(PWM_PIN_B, 0);
     NOP // Make sure phase B is completely off!
+    NOP
     Timer3.pwm(PWM_PIN_A, iDC);
   }
 #else
