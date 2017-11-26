@@ -70,7 +70,8 @@ year = {2017}}
 #include <SPI.h>
 #include <Adafruit_MAX31856.h>
 #include <string.h>
-
+// Conditional compile pragma for controlling H-Bridge output:
+#define HBRIDGE 1// Set to 0 if driving low-side switch or 1 if driving H-Bridge
 #define BS 8 //Backspace character
 #define CR 13// Carrage return
 #define LF 10// Line feed
@@ -79,6 +80,12 @@ year = {2017}}
 #define MAXPOINTS 2000 // Maximum number of data points to store in a file
 #define MAXFILES 10000 // Maximum number of data files to create
 #define HEATER_PIN 3 // PWM output pin
+#if defined HBRIDGE
+#define PWM_PIN_A 3
+#define PWM_PIN_B 2
+#else
+#define HEATER_PIN 3 // PWM output pin
+#endif
 ///////// Chip Select Pins //////
 #define SDCS 10// SPI CS for SD card
 #define MAX31856_CS1 4// SPI CS for first MAX31856 thermocouple interface
@@ -447,10 +454,35 @@ void file_err(void)
     Timer3.pwm(HEATER_PIN, 0);//Set DC to zero!
     while(1);//Stop here.
 }
-
+#if defined HBRIDGE
+void pidHBcontrol()
+{
+  //Err[0] = temp1 - setTemp;//If tracking a cold temp on a Peltier cooler. 
+  Err[0] = setTemp - temp1;
+  derr = Err[0]-Err[1];
+  ierr = ierr + Err[0];
+  if (ierr >= 250.0) ierr = 250.0;// Saturate integral error for anti-windup.
+  if (ierr <= -250.0) ierr = -250.0;
+  Err[1] = Err[0];
+  DC = pidGains.Kp*Err[0]+pidGains.Ki*ierr*Ts+pidGains.Kd*derr/Ts;
+  iDC = (int)DC;// Cast to int and saturate:
+  if(iDC >= 1023)iDC = 1023;
+  if(iDC <= -1023)iDC = -1023;
+  if(iDC < 0){//Set DC for negative error:
+    Timer3.pwm(PWM_PIN_B, 0);
+    NOP // Make sure phase B is completely off!
+    Timer3.pwm(PWM_PIN_A, iDC);// Reads low 10 bits, so sign doesn't matter.
+  }
+  else
+  { // Positive error case:
+    Timer3.pwm(PWM_PIN_A, 0);
+    NOP // Make sure phase A is completely off!
+    Timer3.pwm(PWM_PIN_B, iDC);
+  }
+}
+#else
 void PID_Control(void)
 {  
-  
   //Err[0] = temp1 - setTemp;//If tracking a cold temp on a Peltier cooler. 
   Err[0] = setTemp - temp1;
   derr = Err[0]-Err[1];
@@ -464,7 +496,7 @@ void PID_Control(void)
   if(iDC <= 0)iDC = 0;
   Timer3.pwm(HEATER_PIN, iDC);//Set DC
 }
-
+#endif
 void WriteToSD(void)
 {
      //Write time, temperatures, and current duty cycle to the SD card. 
@@ -845,7 +877,6 @@ if(*inbuffPtr=='t'){//Time functions
 
 void setup()
 {
-  
   Ts = updateIntervals[1]/1000.0;// Set default sampling rate.
   // put your setup code here, to run once:
   pinMode(DATAREAD_LED, OUTPUT);//Set the data-read activity LED pin to output.
@@ -858,7 +889,6 @@ void setup()
   Timer1.initialize(((long)updateIntervals[1])*1000);// Set default update interval.
   Timer1.attachInterrupt(ReadData);
   Timer3.initialize(40); // 40 us => 25 kHz PWM frequency
-  Timer3.pwm(HEATER_PIN, 0);//Start with zero duty cycle
   //Timer5.initialize(500000); // May use later...
   //Timer5.attachInterrupt(callback function of some use...);
   while (!Serial); // for Leonardo/Micro/Zero
@@ -930,8 +960,9 @@ void setup()
  Serial.print("eeGainsSet = :");
  Serial.print(eeGainsSet);
  Serial.print("\n");
- EEPROM.get(eeAcqRateAddr, Interval);
- //interrupts();
+ EEPROM.get(eeAcqRateAddr, Interval);// Below we handle invalid cases:
+ if((Interval<=0) || (Interval >9) || isnan(Interval)) Interval = 2;//Set default update index.
+                    // Reading an empty (not yet assigned a value) EEPROM register returns NAN.
  Serial.print("Kp = :");
  Serial.print(pidGains.Kp);
  Serial.print("\n");
@@ -949,7 +980,12 @@ void setup()
  Timer1.initialize(((long)updateIntervals[Interval])*1000);// Set default update interval.
  Timer1.attachInterrupt(ReadData);
  Timer3.initialize(40); // 40 us => 25 kHz PWM frequency
+ #if defined HBRIDGE
+ Timer3.pwm(PWM_PIN_A,0);
+ Timer3.pwm(PWM_PIN_B,0);
+ #else
  Timer3.pwm(HEATER_PIN, 0);//Start with zero duty cycle
+ #endif
  delay(100);
 }
 ///////////// End setup ////////////
@@ -1125,11 +1161,29 @@ void loop()
     set_Time = false;   
   }
 
-  if (setDC){
+ if (setDC)
+ {
     iDC = atoi(dcStr);
+#if defined HBRIDGE
+// Note that this logic is the opposite of that used
+// in the pidHBcontrol() function.
+  if (iDC < 0)
+  {// Cooling case
+    Timer3.pwm(PWM_PIN_A, 0);
+    NOP // Make sure phase A is completely off!
+    Timer3.pwm(PWM_PIN_B, iDC);// Reads low 10 bits, so sign doesn't matter.
+  }
+  else
+  { // Heating case:
+    Timer3.pwm(PWM_PIN_B, 0);
+    NOP // Make sure phase B is completely off!
+    Timer3.pwm(PWM_PIN_A, iDC);
+  }
+#else
     if (iDC < 0)iDC = 0;// Saturate duty cycles below zero or above 1023.
     if (iDC > 1023) iDC = 1023;
     Timer3.pwm(HEATER_PIN, iDC);
+#endif
     setDC = false;
     for(i = 0; i < sizeof(dcStr); i++)// Flush dcStr buffer.
     {
@@ -1194,7 +1248,11 @@ void loop()
  //if(powerOn){//Safety wrapper around PWM output
   if(pidUpdate&&controlOn)
   {
-    PID_Control();
+#if defined HBRIDGE
+pidHBcontrol();
+#else
+ PID_Control();
+#endif
     pidUpdate = false;
   }
 // }
