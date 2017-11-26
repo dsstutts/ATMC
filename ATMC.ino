@@ -8,6 +8,17 @@ Using Timer 1 PWM to drive Pin 3 at 25 kHz with 10 bit dutycycle
 Pin Assignments:
 
 PWM out on HEATER_PIN Pin 3
+
+When HBRIDGE is defined as 1, we define:
+PWM_PIN_A 3
+and
+PWM_PIN_B 2
+for use in controllig Peltier devices for heating and cooling.
+The Peltier device control is selected using the conditional compile pragma:
+#define HBRIDGE 1
+and deselected using
+#define HBRIDGE 0
+
 Temperature acquisition LED on Pin 11
 MAX31856_CS1 Pin 4 SPI CS for first MAX31856 thermocouple interface
 MAX31856_CS2 Pin 5 SPI CS for second MAX31856 thermocouple interface
@@ -71,7 +82,7 @@ year = {2017}}
 #include <Adafruit_MAX31856.h>
 #include <string.h>
 // Conditional compile pragma for controlling H-Bridge output:
-#define HBRIDGE 1// Set to 0 if driving low-side switch or 1 if driving H-Bridge
+#define HBRIDGE 0// Set to 0 if driving low-side switch or 1 if driving H-Bridge
 #define BS 8 //Backspace character
 #define CR 13// Carrage return
 #define LF 10// Line feed
