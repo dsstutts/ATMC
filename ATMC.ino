@@ -132,7 +132,7 @@
 #define TYPE_T 0x07
 #define NOP __asm__ __volatile__ ("nop");// Inline no-operation ASM for inserting a 62.5 ns delay used
 #define DATAREAD_LED 11//                 for MAX31856 SPI communication and for H-bridge deadtime. 
-#define NOP __asm__ __volatile__ ("nop");//The following executes 10 NOPs in a row for a 625 ns delay:
+//The following executes 10 NOPs in a row for a 625 ns delay:
 #define NOP10 __asm__ __volatile__ ("nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t");
 ////////////////////////////////
 
@@ -516,14 +516,16 @@ void pidHBcontrol()
   if (iDC <= -1023)iDC = -1023;
   if (iDC < 0) { //Set DC for negative error:
     Timer3.pwm(PWM_PIN_B, 0);
-    NOP // Make sure phase B is completely off!
+    NOP10 // Make sure phase B is completely off!
+    NOP10
     NOP
     Timer3.pwm(PWM_PIN_A, iDC);// Reads low 10 bits, so sign doesn't matter.
   }
   else
   { // Positive error case:
     Timer3.pwm(PWM_PIN_A, 0);
-    NOP // Make sure phase A is completely off!
+    NOP10 // Make sure phase A is completely off!
+    NOP10
     NOP
     Timer3.pwm(PWM_PIN_B, iDC);
   }
@@ -1243,14 +1245,16 @@ void loop()
     if (iDC < 0)
     { // Cooling case
       Timer3.pwm(PWM_PIN_A, 0);// The number of NOPs will have to be experimentally verified!
-      NOP // Make sure phase A is completely off!
+      NOP10 // Make sure phase A is completely off!
+      NOP10
       NOP
       Timer3.pwm(PWM_PIN_B, iDC);// Reads low 10 bits, so sign doesn't matter.
     }
     else
     { // Heating case:
       Timer3.pwm(PWM_PIN_B, 0);
-      NOP // Make sure phase B is completely off!
+      NOP10 // Make sure phase B is completely off!
+      NOP10
       NOP
       Timer3.pwm(PWM_PIN_A, iDC);
     }
