@@ -1,5 +1,6 @@
 /*
-  Sets and controls a temperature and acquires and logs temperatures using MAX31856 thermocouple interface chips.
+  Sets and controls a temperature and acquires and logs temperatures 
+  using MAX31856 thermocouple interface chips.
 
   Temperature Control:
 
@@ -70,7 +71,8 @@
 
   @Misc{ATMC2017 ,
   author =   {Stutts, Daniel S.},
-  title = {{TempDAQandControl.ino: Arduino Application to Acquire and Control Temperatures }},
+  title = {{TempDAQandControl.ino: Arduino Application to 
+  Acquire and Control Temperatures }},
   howpublished = {\url{https://github.com/dsstutts/ATMC.git}},
   year = {2017}}
 
@@ -130,15 +132,18 @@
 #define NUM31856REGs 10// Number of special function registers on the MAX31856
 #define TYPE_K 0x03
 #define TYPE_T 0x07
-#define NOP __asm__ __volatile__ ("nop");// Inline no-operation ASM for inserting a 62.5 ns delay used
-#define DATAREAD_LED 11//                 for MAX31856 SPI communication and for H-bridge deadtime. 
+#define NOP __asm__ __volatile__ ("nop");// Inline no-operation ASM 
+#define DATAREAD_LED 11//     for inserting a 62.5 ns delay used  for MAX31856
+//                            SPI communication and for H-bridge deadtime. 
 //The following executes 10 NOPs in a row for a 625 ns delay:
-#define NOP10 __asm__ __volatile__ ("nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t");
+#define NOP10 __asm__ __volatile__ ("nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t"\
+"nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t");
 ////////////////////////////////
 
 ///////// Globals ////////////.
 // These control the data acquisition rate from 200 ms to 1 s:
-double updateIntervals[] = {100.0, 200.0, 300.0, 400.0, 500.0, 600.0, 700.0, 800.0, 900.0, 1000.0};
+double updateIntervals[] = {100.0, 200.0, 300.0, 400.0, 500.0, 600.0, 700.0, \
+800.0, 900.0, 1000.0};
 double *updateIntPtr = updateIntervals;
 volatile char inbuff[200];
 volatile char *inbuffPtr = inbuff;
@@ -164,14 +169,19 @@ String FileName = "";
 String dataString = "";
 String *dataStringPtr;
 String comma = ",";
-//byte RegisterValues[] = {0x90,  0x03,   0xFC,   0x7F,   0xC0,   0x07,     0xFF,     0x80,     0x00,     0x00 };//Type K Thermocouple
-byte RegisterValues[] =   {0x90,  0x07,   0xFC,   0x7F,   0xC0,   0x07,     0xFF,     0x80,     0x00,     0x00 };// Type T Thermocouple
-String RegisterNames[] =  {"CR0", "CR1", "MASK", "CJHF", "CHLF", "LTHFTH", "LTHFTL", "LTLFTH", "LTLFTL", "CJTO"};
-byte RegisterAddresses[] = {0x00,  0x01,   0x02,   0x03,   0x04,   0x04,     0x06,     0x07,     0x08,     0x09 };
+//byte RegisterValues[] = {0x90,  0x03,   0xFC,   0x7F,   0xC0,   0x07,     \
+0xFF,     0x80,     0x00,     0x00 };//Type K Thermocouple
+byte RegisterValues[] =   {0x90,  0x07,   0xFC,   0x7F,   0xC0,   0x07,     \
+0xFF,     0x80,     0x00,     0x00 };// Type T Thermocouple
+String RegisterNames[] =  {"CR0", "CR1", "MASK", "CJHF", "CHLF", \
+"LTHFTH", "LTHFTL", "LTLFTH", "LTLFTL", "CJTO"};
+byte RegisterAddresses[] = {0x00,  0x01,   0x02,   0x03,   0x04,   0x04,     \
+0x06,     0x07,     0x08,     0x09 };
 #if defined TWOTC
 int CSs[] = {MAX31856_CS1, MAX31856_CS2};
 #else
-int CSs[] = {MAX31856_CS1, MAX31856_CS2, MAX31856_CS3, MAX31856_CS4, MAX31856_CS5, MAX31856_CS6};
+int CSs[] = {MAX31856_CS1, MAX31856_CS2, MAX31856_CS3, MAX31856_CS4, \
+MAX31856_CS5, MAX31856_CS6};
 #endif
 boolean tellTime = false;// Output time stamp flag
 boolean set_Time = false;
@@ -271,9 +281,11 @@ const char HelpText[] PROGMEM = {"THC supports the following commands:\r\n \\
        tt -- Show the current time.\r\n\ \\
   gg -- Report current PID gains.\r\n \\
      gp#i#d# -- Set PID gains, where # denotes floating point numbers.\r\n \\
-     Note that while you may set one or two at a time, you must enter the PID gains and times in order!\r\n \\
+     Note that while you may set one or two at a time, you must enter the PID \
+     gains and times in order!\r\n \\
 z -- Monitor data by printing to the serial monitor -- toggle logic.\r\n\ \\
-W#### -- Simultaneously set duty cycle and log data, where #### represents the duty cycle from 0 to 1023.\r\n"
+W#### -- Simultaneously set duty cycle and log data, where #### represents the \
+duty cycle from 0 to 1023.\r\n"
 };
 //12 byte PID gains structure:
 struct PID_Gains {
@@ -362,8 +374,8 @@ unsigned long ReadMultipleRegisters(int Pin, byte StartRegister, int count) {
   NOP;
 
   for (int i = 0; i < count; i++) {
-    data = (data << 8) | SPI.transfer(0); //bitshift left 8 bits, then add the next register
-  }
+    data = (data << 8) | SPI.transfer(0); //bitshift left 8 bits, 
+  }//                                     then add the next register
   digitalWrite(Pin, HIGH);
   return data;
 }
@@ -559,9 +571,11 @@ dataString += ttime + comma + temp1 + comma + temp2;
 #else
 
 #ifdef DEVMODE
-  dataString += ttime + comma + temp1 + comma + temp2 + comma + temp3 + comma + temp4 + comma + temp5 + comma + temp6 + comma + iDC;
+  dataString += ttime + comma + temp1 + comma + temp2 + comma + temp3 + comma + \
+  temp4 + comma + temp5 + comma + temp6 + comma + iDC;
 #else
-dataString += ttime + comma + temp1 + comma + temp2 + comma + temp3 + comma + temp4 + comma + temp5 + comma + temp6;
+dataString += ttime + comma + temp1 + comma + temp2 + comma + temp3 + comma + \
+temp4 + comma + temp5 + comma + temp6;
 #endif
 
 #endif
@@ -649,8 +663,8 @@ void parseSerialInput(void) {
     numDataPoints = 0;
     ttime = 0.0;
     while (*inbuffPtr != '\0') {
-      if (((*inbuffPtr >= '0') && (*inbuffPtr <= '9')) || (*inbuffPtr == '.')) { // Make sure they're numeric!
-        tempStr[i] = *inbuffPtr;
+      if (((*inbuffPtr >= '0') && (*inbuffPtr <= '9')) || (*inbuffPtr == '.')) { // Make 
+        tempStr[i] = *inbuffPtr;//                  sure they're numeric!
         i++;
       }//End if numeric
       *inbuffPtr++;
@@ -671,8 +685,8 @@ void parseSerialInput(void) {
     openLoop = true;
     setDC = true;
     while (*inbuffPtr != '\0') {
-      if (((*inbuffPtr >= '0') && (*inbuffPtr <= '9')) || (*inbuffPtr == '.')) { // Make sure they're numeric!
-        dcStr[i] = *inbuffPtr;
+      if (((*inbuffPtr >= '0') && (*inbuffPtr <= '9')) || (*inbuffPtr == '.')) { 
+        dcStr[i] = *inbuffPtr;// Make sure they're numeric!        
         i++;
       }//End if numeric
       *inbuffPtr++;
@@ -691,8 +705,8 @@ void parseSerialInput(void) {
     ttime = 0.0;
     *inbuffPtr++;
     while (*inbuffPtr != '\0') {
-      if (((*inbuffPtr >= '0') && (*inbuffPtr <= '9')) || (*inbuffPtr == '.')) { // Make sure they're numeric!
-        dcStr[i] = *inbuffPtr;
+      if (((*inbuffPtr >= '0') && (*inbuffPtr <= '9')) || (*inbuffPtr == '.')) {  
+        dcStr[i] = *inbuffPtr;// Make sure they're numeric!  
         i++;
       }//End if numeric
       *inbuffPtr++;
@@ -728,8 +742,8 @@ void parseSerialInput(void) {
       *inbuffPtr--;// Decrement pointer
       setAcqRate = true;
       while ((*inbuffPtr != '\0')) {
-        if ((*inbuffPtr >= '0') && (*inbuffPtr <= '9')) {// Make sure it's numeric!
-          dataStr[0] = *inbuffPtr;
+        if ((*inbuffPtr >= '0') && (*inbuffPtr <= '9')) {
+          dataStr[0] = *inbuffPtr;//Make sure they're numeric!  
         }
         *inbuffPtr++;//Increment buffer pointer.
         i++;
@@ -784,8 +798,8 @@ void parseSerialInput(void) {
             set_Second = true;
             break;
           default:
-            if ((*inbuffPtr >= '0') && (*inbuffPtr <= '9')) {// Make sure they're numeric!
-
+            if ((*inbuffPtr >= '0') && (*inbuffPtr <= '9')) {
+              // Make sure they're numeric!
               if (secondSet && i < 6) {
                 SecondStr[i] = *inbuffPtr;
                 yearSet = false;
@@ -917,8 +931,8 @@ void parseSerialInput(void) {
             kdSet = true;
             break;
           default:
-            if (((*inbuffPtr >= '0') && (*inbuffPtr <= '9')) || (*inbuffPtr == '.')) { // Make sure they're numeric!
-              if (kdSet) {
+            if (((*inbuffPtr >= '0') && (*inbuffPtr <= '9')) || (*inbuffPtr == '.')) { 
+              if (kdSet) {// Make sure they're numeric!
                 kdStr[k] = *inbuffPtr;
                 kpSet = false;
                 kiSet = false;
@@ -1014,7 +1028,8 @@ void setup()
 
   if (!volume.init(card))
   {
-    Serial.println("Could not find FAT16/FAT32 partition.\nMake sure you've formatted the card\n");
+    Serial.println("Could not find FAT16/FAT32 partition.\
+    \nMake sure you've formatted the card\n");
     return;
   }
   SPI.end();
@@ -1052,8 +1067,8 @@ void setup()
   Serial.print("\n");
   Ts = updateIntervals[Interval] / 1000.0; // Set default sampling rate.
   //Timer1.initialize(200000);// 200 ms
-  Timer1.initialize(((long)updateIntervals[Interval]) * 1000); // Set default update interval.
-  Timer1.attachInterrupt(ReadData);
+  Timer1.initialize(((long)updateIntervals[Interval]) * 1000); // Set default 
+  Timer1.attachInterrupt(ReadData);                           // update interval.
   Timer3.initialize(40); // 40 us => 25 kHz PWM frequency
 #ifdef HBRIDGE
   Timer3.pwm(PWM_PIN_A, 0);
@@ -1209,28 +1224,35 @@ void loop()
     // Currently we can only set hour, minute and second...
     DateTime now = rtc.now();
     if (set_Year) {
-      rtc.adjust(DateTime(atoi(YearStr), now.month(), now.day(), now.hour(), now.minute(), now.second()));
+      rtc.adjust(DateTime(atoi(YearStr), now.month(), now.day(), now.hour(), \
+      now.minute(), now.second()));
       set_Year = false;
     }
     if (set_Month) {
-      rtc.adjust(DateTime(now.year(), atoi(MonthStr), now.day(), now.hour(), now.minute(), now.second()));
+      rtc.adjust(DateTime(now.year(), atoi(MonthStr), now.day(), now.hour(), \
+      now.minute(), now.second()));
       set_Month = false;
     }
     if (set_Day) {
-      rtc.adjust(DateTime(now.year(), now.month(), atoi(DayStr), now.hour(), now.minute(), now.second()));
+      rtc.adjust(DateTime(now.year(), now.month(), atoi(DayStr), now.hour(), \
+      now.minute(), now.second()));
       set_Day = false;
     }
     if (set_Hour) {
-      rtc.adjust(DateTime(now.year(), now.month(), now.day(), atoi(HourStr), now.minute(), now.second()));
+      rtc.adjust(DateTime(now.year(), now.month(), now.day(), atoi(HourStr), \
+      now.minute(), now.second()));
       set_Hour = false;
     }
     if (set_Minute) {
-      // rtc.adjust(DateTime(Year, Month, Day, Hour, atoi(MinuteStr), now.second()));
-      rtc.adjust(DateTime(now.year(), now.month(), now.day(), now.hour(), atoi(MinuteStr), now.second()));
+      // rtc.adjust(DateTime(Year, Month, Day, Hour, atoi(MinuteStr), \
+      now.second()));
+      rtc.adjust(DateTime(now.year(), now.month(), now.day(), now.hour(), \
+      atoi(MinuteStr), now.second()));
       set_Minute = false;
     }
     if (set_Second) {
-      rtc.adjust(DateTime(now.year(), now.month(), now.day(), now.hour(), now.minute(), atoi(SecondStr)));
+      rtc.adjust(DateTime(now.year(), now.month(), now.day(), now.hour(), \
+      now.minute(), atoi(SecondStr)));
       set_Second = false;
     }
     set_Time = false;
@@ -1244,7 +1266,8 @@ void loop()
     // in the pidHBcontrol() function.
     if (iDC < 0)
     { // Cooling case
-      Timer3.pwm(PWM_PIN_A, 0);// The number of NOPs will have to be experimentally verified!
+      Timer3.pwm(PWM_PIN_A, 0);// The number of NOPs will have 
+                               // to be experimentally verified!
       NOP10 // Make sure phase A is completely off!
       NOP10
       NOP
@@ -1283,12 +1306,18 @@ void loop()
     temp5 = ReadTemperature(CSs[4]);
     temp6 = ReadTemperature(CSs[5]);
 #endif
-    if (temp1 >= 120) { // Shut down if control temp > 120 degrees C.
-      Timer3.pwm(HEATER_PIN, 0);//Set DC to zero!
-      noInterrupts();
-      logfile.close();
-      while (1); //Stop here now!
-    }
+if (temp1 >= 120) 
+{ // Shut down if control temp > 120 degrees C.
+#ifdef HBRIDGE
+  Timer3.pwm(PWM_PIN_A, 0);//Trun both phases off!
+  Timer3.pwm(PWM_PIN_B, 0);
+#else
+  Timer3.pwm(HEATER_PIN, 0);//Set DC to zero!
+#endif
+  noInterrupts();
+  logfile.close();
+  while (1); //Stop here now!
+}
     //  if(record){ // May cache data for block (512 byte) write later...
     //TC1_temp[numDataPoints] = temp1;
     //TC2_temp[numDataPoints] = temp2;
@@ -1352,12 +1381,14 @@ void loop()
   //else
   //Timer3.pwm(HEATER_PIN, 0);//Set DC to zero!
 
-  if (allOff)
-  {
-    openLoop = false;
-    powerOn = false;
-    saveData = false;
+ if (allOff)
+ {
+#ifdef HBRIDGE
+Timer3.pwm(PWM_PIN_A, 0);//Trun both phases off!
+Timer3.pwm(PWM_PIN_B, 0);
+#else
     Timer3.pwm(HEATER_PIN, 0);//Set DC to zero!
+#endif
     noInterrupts();
     SPI.setDataMode(SPI_MODE0);
     logfile.close();
