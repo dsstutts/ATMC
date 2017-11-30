@@ -101,7 +101,8 @@
 //#define TWOTC 
 // Conditional precompiler directive for controlling H-Bridge output:
 //#define HBRIDGE 
-
+//#define THREEPHASE
+#define SINGLEPHASE
 #define BS 8 //Backspace character
 #define CR 13// Carrage return
 #define LF 10// Line feed
@@ -224,8 +225,21 @@ double temp6;
 double setTemp = 50.0;// Default target temperature
 double ttime = 0;// Temperature time
 double Ts = 200.0;// Default data acquisition rate.
+// We're currently only using the current and previous errors:
+#ifdef SINGLEPHASE
 double Err[] = {0.0, 0.0, 0.0};//current error, last error, error before last
 double derr = 0.0, ierr = 0.0;
+#endif
+
+#ifdef THREEPHASE
+double Err1[] = {0.0, 0.0, 0.0};//current error, last error, error before last
+double Err2[] = {0.0, 0.0, 0.0};//current error, last error, error before last
+double Err3[] = {0.0, 0.0, 0.0};//current error, last error, error before last
+double derr1 = 0.0, ierr1 = 0.0;
+double derr2 = 0.0, ierr2 = 0.0;
+double derr3 = 0.0, ierr3 = 0.0;
+#endif
+
 // Set some default gains:
 double Kp = 200.0;
 double DC = 0.0;
@@ -530,7 +544,8 @@ void pidHBcontrol()
     Timer3.pwm(PWM_PIN_B, 0);
     NOP10 // Make sure phase B is completely off!
     NOP10
-    NOP
+    NOP10
+    NOP10
     Timer3.pwm(PWM_PIN_A, iDC);// Reads low 10 bits, so sign doesn't matter.
   }
   else
@@ -538,13 +553,15 @@ void pidHBcontrol()
     Timer3.pwm(PWM_PIN_A, 0);
     NOP10 // Make sure phase A is completely off!
     NOP10
-    NOP
+    NOP10
+    NOP10
     Timer3.pwm(PWM_PIN_B, iDC);
   }
 }
 
-#else
+#endif
 
+#ifdef SINGLEPHASE
 void PID_Control(void)
 {
   //Err[0] = temp1 - setTemp;//If tracking a cold temp on a Peltier cooler.
@@ -560,7 +577,51 @@ void PID_Control(void)
   if (iDC <= 0)iDC = 0;
   Timer3.pwm(HEATER_PIN, iDC);//Set DC
 }
+#endif
 
+#ifdef THREEPHASE
+void PID_Control(void)
+//
+// Here we assume that the same PID gains can be used
+// for all three temperature controls.  This assumption
+// may not be valid.
+//
+{
+  //Err[0] = temp1 - setTemp;//If tracking a cold temp on a Peltier cooler.
+  Err1[0] = setTemp - temp1;
+  Err2[0] = setTemp - temp2;
+  Err3[0] = setTemp - temp3;
+  derr1 = Err1[0] - Err1[1];
+  derr2 = Err2[0] - Err2[1];
+  derr3 = Err2[0] - Err2[1];
+  ierr1 = ierr1 + Err1[0];
+  ierr2 = ierr2 + Err2[0];
+  ierr3 = ierr3 + Err3[0];
+  if (ierr1 >= 250.0) ierr1 = 250.0;// Saturate integral error for anti-windup.
+  if (ierr1 <= -250.0) ierr1 = -250.0;
+  if (ierr2 >= 250.0) ierr2 = 250.0;// Saturate integral error for anti-windup.
+  if (ierr2 <= -250.0) ierr2 = -250.0;
+  if (ierr3 >= 250.0) ierr3 = 250.0;// Saturate integral error for anti-windup.
+  if (ierr3 <= -250.0) ierr3 = -250.0;
+  Err1[1] = Err1[0];
+  Err2[1] = Err2[0];
+  Err3[1] = Err3[0];
+  DC1 = pidGains.Kp * Err1[0] + pidGains.Ki * ierr1 * Ts + pidGains.Kd * derr1 / Ts;
+  DC2 = pidGains.Kp * Err2[0] + pidGains.Ki * ierr2 * Ts + pidGains.Kd * derr2 / Ts;
+  DC3 = pidGains.Kp * Err3[0] + pidGains.Ki * ierr3 * Ts + pidGains.Kd * derr3 / Ts;
+  iDC1 = (int)DC1;// Cast to int
+  if (iDC1 >= 1023)iDC1 = 1023;
+  if (iDC1 <= 0)iDC1 = 0;
+  Timer3.pwm(PWM_PIN_A, iDC1);//Set DC
+  iDC1 = (int)DC2;// Cast to int
+  if (iDC2 >= 1023)iDC2 = 1023;
+  if (iDC2 <= 0)iDC2 = 0;
+  Timer3.pwm(PWM_PIN_B, iDC2);//Set DC
+  iDC1 = (int)DC3;// Cast to int
+  if (iDC3 >= 1023)iDC3 = 1023;
+  if (iDC3 <= 0)iDC3 = 0;
+  Timer3.pwm(PWM_PIN_C iDC3);//Set DC
+}
 #endif
 
 void WriteToSD(void)
@@ -1270,7 +1331,8 @@ void loop()
                                // to be experimentally verified!
       NOP10 // Make sure phase A is completely off!
       NOP10
-      NOP
+      NOP10
+      NOP10
       Timer3.pwm(PWM_PIN_B, iDC);// Reads low 10 bits, so sign doesn't matter.
     }
     else
@@ -1278,10 +1340,11 @@ void loop()
       Timer3.pwm(PWM_PIN_B, 0);
       NOP10 // Make sure phase B is completely off!
       NOP10
-      NOP
+      NOP10
+      NOP10
       Timer3.pwm(PWM_PIN_A, iDC);
     }
-#else
+#elifdef SINGLEPHASE
     if (iDC < 0)iDC = 0;// Saturate duty cycles below zero or above 1023.
     if (iDC > 1023) iDC = 1023;
     Timer3.pwm(HEATER_PIN, iDC);
@@ -1309,10 +1372,14 @@ void loop()
 if (temp1 >= 120) 
 { // Shut down if control temp > 120 degrees C.
 #ifdef HBRIDGE
-  Timer3.pwm(PWM_PIN_A, 0);//Trun both phases off!
-  Timer3.pwm(PWM_PIN_B, 0);
-#else
-  Timer3.pwm(HEATER_PIN, 0);//Set DC to zero!
+Timer3.pwm(PWM_PIN_A, 0);//Turn both phases off!
+Timer3.pwm(PWM_PIN_B, 0);
+#elifdef SINGLEPHASE
+Timer3.pwm(HEATER_PIN, 0);//Set DC to zero!
+#elifdef THREEPHASE
+Timer3.pwm(PWM_PIN_A, 0);//Turn all 3 phases off!
+Timer3.pwm(PWM_PIN_B, 0);
+Timer3.pwm(PWM_PIN_C, 0);
 #endif
   noInterrupts();
   logfile.close();
@@ -1384,10 +1451,14 @@ if (temp1 >= 120)
  if (allOff)
  {
 #ifdef HBRIDGE
-Timer3.pwm(PWM_PIN_A, 0);//Trun both phases off!
+Timer3.pwm(PWM_PIN_A, 0);//Turn both phases off!
 Timer3.pwm(PWM_PIN_B, 0);
-#else
-    Timer3.pwm(HEATER_PIN, 0);//Set DC to zero!
+#elifdef SINGLEPHASE
+Timer3.pwm(HEATER_PIN, 0);//Set DC to zero!
+#elifdef THREEPHASE
+Timer3.pwm(PWM_PIN_A, 0);//Turn all 3 phases off!
+Timer3.pwm(PWM_PIN_B, 0);
+Timer3.pwm(PWM_PIN_C, 0);
 #endif
     noInterrupts();
     SPI.setDataMode(SPI_MODE0);
