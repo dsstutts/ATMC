@@ -94,7 +94,9 @@
 // The following precompiler directives are used to choose which code
 // to compile throughout this file.  They allow you to select or deselect
 // functionality as needed using the same code.
-//
+// Precompiler directive for Revision 1:
+//#define REV1 //Uncomment after revision 1 which changes
+//               the pin assignment for MAX31856_CS2.
 // Conditional precompiler directive for development mode:
 //#define DEVMODE
 // Conditional precompiler directive for 2 thermocouple case (1st development prototype)
@@ -114,13 +116,21 @@
 #ifdef HBRIDGE
 #define PWM_PIN_A 3
 #define PWM_PIN_B 2
-#else
+#elifdef SINGLEPHASE
 #define HEATER_PIN 3 // PWM output pin
+#elifdef THREEPHASE
+#define PWM_PIN_A 3
+#define PWM_PIN_B 2
+#define PWM_PIN_C 5
 #endif
 ///////// Chip Select Pins //////
 #define SDCS 10// SPI CS for SD card
 #define MAX31856_CS1 4// SPI CS for first MAX31856 thermocouple interface
+#ifdef REV1 //Activate after Revision 1:
+#define MAX31856_CS2 12// SPI CS for second MAX31856 thermocouple interface
+#else
 #define MAX31856_CS2 5// SPI CS for second MAX31856 thermocouple interface
+#endif
 #define MAX31856_CS3 6// SPI CS for third MAX31856 thermocouple interface
 #define MAX31856_CS4 7// SPI CS for fourth MAX31856 thermocouple interface
 #define MAX31856_CS5 8// SPI CS for fifth MAX31856 thermocouple interface
