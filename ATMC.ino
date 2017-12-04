@@ -653,6 +653,10 @@ dataString += ttime + comma + temp1 + comma + temp2;
 #ifdef DEVMODE
   dataString += ttime + comma + temp1 + comma + temp2 + comma + temp3 + comma + \
   temp4 + comma + temp5 + comma + temp6 + comma + iDC;
+#ifdef FANSPEED
+  dataString += ttime + comma + temp1 + comma + temp2 + comma + temp3 + comma + \
+  temp4 + comma + temp5 + comma + temp6 + comma + iDC + comma + fanDC;
+#endif
 #else
 dataString += ttime + comma + temp1 + comma + temp2 + comma + temp3 + comma + \
 temp4 + comma + temp5 + comma + temp6;
