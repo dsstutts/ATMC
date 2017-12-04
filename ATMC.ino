@@ -104,6 +104,7 @@
 // Conditional precompiler directive for controlling H-Bridge output:
 //#define HBRIDGE 
 //#define THREEPHASE
+#define FANSPEED
 #define SINGLEPHASE
 #define BS 8 //Backspace character
 #define CR 13// Carrage return
@@ -122,6 +123,9 @@
 #define PWM_PIN_A 3
 #define PWM_PIN_B 2
 #define PWM_PIN_C 5
+#endif
+#ifdef FANSPEED
+#define PWM_PIN_B 2
 #endif
 ///////// Chip Select Pins //////
 #define SDCS 10// SPI CS for SD card
@@ -256,6 +260,7 @@ double derr3 = 0.0, ierr3 = 0.0;
 double Kp = 200.0;
 double DC = 0.0;
 int iDC = 0;
+int fanDC = 0;
 boolean KpSet = false;
 
 //double Ki = 2.0;
@@ -273,6 +278,7 @@ boolean controlOn = false;//PID control flag.
 boolean openLoop = false;//Open loop flag
 boolean logData = false;//Start saving data flag
 boolean setDC = false;//Manual open loop duty cycle setting flag.
+boolean setFanSpeed = false;//Manual open loop duty cycle fan speed flag.
 unsigned int i, j, numPts = 0;
 
 volatile char InChar = '\0'; // serial input character
@@ -284,6 +290,7 @@ const char HelpText[] PROGMEM = {"THC supports the following commands:\r\n \\
   A -- Control, acquire and store data\r\n \\
   a -- Stop everything and save data; wait until restart.\r\n \\
   C# -- Run in open loop with dutycycle #.\r\n \\
+  f# -- Set fan speed dutycycle with dutycycle # on phase B.\r\n \\
   h -- List of supported commands\r\n \\
   L -- Log data; use 'a' to stop and save.\r\n \\
   o -- Turn power off\r\n \\
@@ -824,7 +831,21 @@ void parseSerialInput(void) {
       Interval = (unsigned int)atoi(dataStr);//
     }//End else
   }// End if s
-
+if (*inbuffPtr == 'f')
+{
+   while ((*inbuffPtr != '\0')) 
+   {
+        if ((*inbuffPtr >= '0') && (*inbuffPtr <= '9')) {
+          dataStr[0] = *inbuffPtr;//Make sure they're numeric!  
+        }
+        *inbuffPtr++;//Increment buffer pointer.
+        i++;
+   }
+      fanDC = (unsigned int)atoi(dataStr);//
+      setFanSpeed = true;
+   return;
+   
+}
   // Time functions:
   if (*inbuffPtr == 't') { //Time functions
     *inbuffPtr++;//increment pointer to second character
@@ -1459,6 +1480,12 @@ Timer3.pwm(PWM_PIN_C, 0);
   // }
   //else
   //Timer3.pwm(HEATER_PIN, 0);//Set DC to zero!
+// Set the fan speed:
+if(setFanSpeed)
+{
+  Timer3.pwm(PWM_PIN_B, fanDC);
+  setFanSpeed = false;
+}
 
  if (allOff)
  {
