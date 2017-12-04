@@ -26,7 +26,10 @@
   and any functions you'd like to used during development can be 
   compiled in by uncommenting
   //#define DEVMODE
-  
+  If setting the speed of a computer fan, uncomment:
+  //#define FANSPEED 
+  and control the fan speed by setting the dutycycle of
+  the Phase C PWM output.
   Temperature acquisition LED on Pin 11
   MAX31856_CS1 Pin 4 SPI CS for first MAX31856 thermocouple interface
   MAX31856_CS2 Pin 5 SPI CS for second MAX31856 thermocouple interface
@@ -125,7 +128,8 @@
 #define PWM_PIN_C 5
 #endif
 #ifdef FANSPEED
-#define PWM_PIN_B 2
+//#define PWM_PIN_B 2
+#define PWM_PIN_C 5
 #endif
 ///////// Chip Select Pins //////
 #define SDCS 10// SPI CS for SD card
@@ -290,7 +294,7 @@ const char HelpText[] PROGMEM = {"THC supports the following commands:\r\n \\
   A -- Control, acquire and store data\r\n \\
   a -- Stop everything and save data; wait until restart.\r\n \\
   C# -- Run in open loop with dutycycle #.\r\n \\
-  f# -- Set fan speed dutycycle with dutycycle # on phase B.\r\n \\
+  f# -- Set fan speed dutycycle with dutycycle # on phase C.\r\n \\
   h -- List of supported commands\r\n \\
   L -- Log data; use 'a' to stop and save.\r\n \\
   o -- Turn power off\r\n \\
@@ -1487,7 +1491,7 @@ Timer3.pwm(PWM_PIN_C, 0);
 // Set the fan speed:
 if(setFanSpeed)
 {
-  Timer3.pwm(PWM_PIN_B, fanDC);
+  Timer3.pwm(PWM_PIN_C, fanDC);
   setFanSpeed = false;
 }
 
