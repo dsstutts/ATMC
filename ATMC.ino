@@ -100,7 +100,7 @@
 // Conditional precompiler directive for development mode:
 //#define DEVMODE
 // Conditional precompiler directive for 2 thermocouple case (1st development prototype)
-//#define TWOTC 
+#define TWOTC 
 // Conditional precompiler directive for controlling H-Bridge output:
 //#define HBRIDGE 
 //#define THREEPHASE
@@ -136,6 +136,8 @@
 #define MAX31856_CS5 8// SPI CS for fifth MAX31856 thermocouple interface
 #define MAX31856_CS6 9// SPI CS for sixth MAX31856 thermocouple interface
 #ifdef TWOTC
+#define MAX31856_CS1 42// SPI CS for first MAX31856 thermocouple interface
+#define MAX31856_CS2 43// SPI CS for second MAX31856 thermocouple interface
 #define NUM_TCs 2 // Number of thermocouples
 #else
 #define NUM_TCs 6 // Number of thermocouples
