@@ -1,5 +1,5 @@
 /*
-  Sets and controls a temperature and acquires and logs temperatures 
+  Sets and controls three temperatures and acquires and logs up to six temperatures 
   using MAX31856 thermocouple interface chips.
 
   Temperature Control:
@@ -13,19 +13,9 @@
 
   When HBRIDGE is defined as 1, we define:
   PWM_PIN_A 3
-  and
   PWM_PIN_B 2
-  for use in controllig Peltier devices for heating and cooling.
-  The Peltier device control is selected using the pre-compiler directive definition:
-  #define HBRIDGE
-  and deselected by commenting out the directive
-  //#define HBRIDGE
-  Similarly, the same code can be used for the first prototype 
-  having only two thermocouples by uncommenting:
-  //#define TWOTC
-  and any functions you'd like to used during development can be 
-  compiled in by uncommenting
-  //#define DEVMODE
+  PWM_PIN C 5
+  
   If setting the speed of a computer fan, uncomment:
   //#define FANSPEED 
   and control the fan speed by setting the dutycycle of
@@ -100,15 +90,7 @@
 // Precompiler directive for Revision 1:
 #define REV1 //Uncomment after revision 1 which changes
 //               the pin assignment for MAX31856_CS2.
-// Conditional precompiler directive for development mode:
-//#define DEVMODE
-// Conditional precompiler directive for 2 thermocouple case (1st development prototype)
-//#define TWOTC 
-// Conditional precompiler directive for controlling H-Bridge output:
-//#define HBRIDGE 
-//#define THREEPHASE
-#define FANSPEED
-#define SINGLEPHASE
+
 #define BS 8 //Backspace character
 #define CR 13// Carrage return
 #define LF 10// Line feed
@@ -116,21 +98,11 @@
 #define ECHO_//Comment out if you don't want to echo input chars to the serial monitor
 #define MAXPOINTS 2000 // Maximum number of data points to store in a file
 #define MAXFILES 10000 // Maximum number of data files to create
-#define HEATER_PIN 3 // PWM output pin
-#ifdef HBRIDGE
-#define PWM_PIN_A 3
-#define PWM_PIN_B 2
-#elifdef SINGLEPHASE
-#define HEATER_PIN 3 // PWM output pin
-#elifdef THREEPHASE
+
 #define PWM_PIN_A 3
 #define PWM_PIN_B 2
 #define PWM_PIN_C 5
-#endif
-#ifdef FANSPEED
-//#define PWM_PIN_B 2
-#define PWM_PIN_C 5
-#endif
+
 ///////// Chip Select Pins //////
 #define SDCS 10// SPI CS for SD card
 #define MAX31856_CS1 4// SPI CS for first MAX31856 thermocouple interface
@@ -139,26 +111,20 @@
 #else
 #define MAX31856_CS2 5// SPI CS for second MAX31856 thermocouple interface
 #endif
+
 #define MAX31856_CS3 6// SPI CS for third MAX31856 thermocouple interface
 #define MAX31856_CS4 7// SPI CS for fourth MAX31856 thermocouple interface
 #define MAX31856_CS5 8// SPI CS for fifth MAX31856 thermocouple interface
 #define MAX31856_CS6 9// SPI CS for sixth MAX31856 thermocouple interface
-#ifdef TWOTC
-#define MAX31856_CS1 42// SPI CS for first MAX31856 thermocouple interface
-#define MAX31856_CS2 43// SPI CS for second MAX31856 thermocouple interface
-#define NUM_TCs 2 // Number of thermocouples
-#else
+
 #define NUM_TCs 6 // Number of thermocouples
-#endif
+
 #define NUM31856REGs 10// Number of special function registers on the MAX31856
 #define TYPE_K 0x03
 #define TYPE_T 0x07
 #define NOP __asm__ __volatile__ ("nop");// Inline no-operation ASM 
 #define DATAREAD_LED 11//     for inserting a 62.5 ns delay used  for MAX31856
-//                            SPI communication and for H-bridge deadtime. 
-//The following executes 10 NOPs in a row for a 625 ns delay:
-#define NOP10 __asm__ __volatile__ ("nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t"\
-"nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t");
+//                            SPI communication
 ////////////////////////////////
 
 ///////// Globals ////////////.
@@ -171,7 +137,7 @@ volatile char *inbuffPtr = inbuff;
 volatile unsigned int InputBufferIndex;
 unsigned long numDataPoints = 0;// Counts the number of datapoints acquired
 boolean parseCommands = false;
-boolean monitorData = true;
+boolean monitorData = true;// Default to monitoring data
 char HourStr[6];
 char MinuteStr[6];
 char SecondStr[6];
@@ -198,12 +164,10 @@ String RegisterNames[] =  {"CR0", "CR1", "MASK", "CJHF", "CHLF", \
 "LTHFTH", "LTHFTL", "LTLFTH", "LTLFTL", "CJTO"};
 byte RegisterAddresses[] = {0x00,  0x01,   0x02,   0x03,   0x04,   0x04,     \
 0x06,     0x07,     0x08,     0x09 };
-#if defined TWOTC
-int CSs[] = {MAX31856_CS1, MAX31856_CS2};
-#else
+
 int CSs[] = {MAX31856_CS1, MAX31856_CS2, MAX31856_CS3, MAX31856_CS4, \
 MAX31856_CS5, MAX31856_CS6};
-#endif
+
 boolean tellTime = false;// Output time stamp flag
 boolean set_Time = false;
 boolean set_Hour = false;
@@ -231,39 +195,36 @@ unsigned int Interval = 9;
 boolean printAcqRate = false;
 boolean setAcqRate = false;
 double  acqInterval = 0;
-#if defined TWOTC
-double temp1;
-double temp2;
-#else
+
 double temp1;
 double temp2;
 double temp3;
 double temp4;
 double temp5;
 double temp6;
-#endif
+
 double setTemp = 50.0;// Default target temperature
 double ttime = 0;// Temperature time
 double Ts = 200.0;// Default data acquisition rate.
 // We're currently only using the current and previous errors:
-#ifdef SINGLEPHASE
-double Err[] = {0.0, 0.0, 0.0};//current error, last error, error before last
-double derr = 0.0, ierr = 0.0;
-#endif
 
-#ifdef THREEPHASE
+
 double Err1[] = {0.0, 0.0, 0.0};//current error, last error, error before last
 double Err2[] = {0.0, 0.0, 0.0};//current error, last error, error before last
 double Err3[] = {0.0, 0.0, 0.0};//current error, last error, error before last
 double derr1 = 0.0, ierr1 = 0.0;
 double derr2 = 0.0, ierr2 = 0.0;
 double derr3 = 0.0, ierr3 = 0.0;
-#endif
+
 
 // Set some default gains:
 double Kp = 200.0;
-double DC = 0.0;
-int iDC = 0;
+double DC1 = 0.0;
+double DC2 = 0.0;
+double DC3 = 0.0;
+int iDC1 = 0;
+int iDC2 = 0;
+int iDC3 = 0;
 int fanDC = 0;
 boolean KpSet = false;
 
@@ -544,65 +505,12 @@ void file_err(void)
     myChar = pgm_read_word_near(fileCreateerror + j);
     Serial.print(myChar);
   }
-  Timer3.pwm(HEATER_PIN, 0);//Set DC to zero!
+  Timer3.pwm(PWM_PIN_A, 0);//Turn all 3 phases off!
+  Timer3.pwm(PWM_PIN_B, 0);
+  Timer3.pwm(PWM_PIN_C, 0);
   while (1); //Stop here.
 }
 
-#ifdef HBRIDGE
-
-void pidHBcontrol()
-{
-  //Err[0] = temp1 - setTemp;//If tracking a cold temp on a Peltier cooler.
-  Err[0] = setTemp - temp1;
-  derr = Err[0] - Err[1];
-  ierr = ierr + Err[0];
-  if (ierr >= 250.0) ierr = 250.0;// Saturate integral error for anti-windup.
-  if (ierr <= -250.0) ierr = -250.0;
-  Err[1] = Err[0];
-  DC = pidGains.Kp * Err[0] + pidGains.Ki * ierr * Ts + pidGains.Kd * derr / Ts;
-  iDC = (int)DC;// Cast to int and saturate:
-  if (iDC >= 1023)iDC = 1023;
-  if (iDC <= -1023)iDC = -1023;
-  if (iDC < 0) { //Set DC for negative error:
-    Timer3.pwm(PWM_PIN_B, 0);
-    NOP10 // Make sure phase B is completely off!
-    NOP10
-    NOP10
-    NOP10
-    Timer3.pwm(PWM_PIN_A, iDC);// Reads low 10 bits, so sign doesn't matter.
-  }
-  else
-  { // Positive error case:
-    Timer3.pwm(PWM_PIN_A, 0);
-    NOP10 // Make sure phase A is completely off!
-    NOP10
-    NOP10
-    NOP10
-    Timer3.pwm(PWM_PIN_B, iDC);
-  }
-}
-
-#endif
-
-#ifdef SINGLEPHASE
-void PID_Control(void)
-{
-  //Err[0] = temp1 - setTemp;//If tracking a cold temp on a Peltier cooler.
-  Err[0] = setTemp - temp1;
-  derr = Err[0] - Err[1];
-  ierr = ierr + Err[0];
-  if (ierr >= 250.0) ierr = 250.0;// Saturate integral error for anti-windup.
-  if (ierr <= -250.0) ierr = -250.0;
-  Err[1] = Err[0];
-  DC = pidGains.Kp * Err[0] + pidGains.Ki * ierr * Ts + pidGains.Kd * derr / Ts;
-  iDC = (int)DC;// Cast to int
-  if (iDC >= 1023)iDC = 1023;
-  if (iDC <= 0)iDC = 0;
-  Timer3.pwm(HEATER_PIN, iDC);//Set DC
-}
-#endif
-
-#ifdef THREEPHASE
 void PID_Control(void)
 //
 // Here we assume that the same PID gains can be used
@@ -643,32 +551,18 @@ void PID_Control(void)
   iDC1 = (int)DC3;// Cast to int
   if (iDC3 >= 1023)iDC3 = 1023;
   if (iDC3 <= 0)iDC3 = 0;
-  Timer3.pwm(PWM_PIN_C iDC3);//Set DC
+  Timer3.pwm(PWM_PIN_C, iDC3);//Set DC
 }
-#endif
 
 void WriteToSD(void)
 {
   //Write time, temperatures, and current duty cycle to the SD card.
-#ifdef TWOTC
-dataString += ttime + comma + temp1 + comma + temp2;
-#else
 
-#ifdef DEVMODE
-  dataString += ttime + comma + temp1 + comma + temp2 + comma + temp3 + comma + \
-  temp4 + comma + temp5 + comma + temp6 + comma + iDC;
-#ifdef FANSPEED
-  dataString += ttime + comma + temp1 + comma + temp2 + comma + temp3 + comma + \
-  temp4 + comma + temp5 + comma + temp6 + comma + iDC + comma + fanDC;
-#endif
-#else
 dataString += ttime + comma + temp1 + comma + temp2 + comma + temp3 + comma + \
 temp4 + comma + temp5 + comma + temp6;
-#endif
 
-#endif
-  logfile.println(dataString);
-  dataString = "";
+logfile.println(dataString);
+dataString = "";
 
   //  if (logfile.writeError || !logfile.sync()) {
   //    error("write header");
@@ -1172,12 +1066,6 @@ void setup()
   Timer1.initialize(((long)updateIntervals[Interval]) * 1000); // Set default 
   Timer1.attachInterrupt(ReadData);                           // update interval.
   Timer3.initialize(40); // 40 us => 25 kHz PWM frequency
-#ifdef HBRIDGE
-  Timer3.pwm(PWM_PIN_A, 0);
-  Timer3.pwm(PWM_PIN_B, 0);
-#else
-  Timer3.pwm(HEATER_PIN, 0);//Start with zero duty cycle
-#endif
   delay(100);
 }
 ///////////// End setup ////////////
@@ -1360,88 +1248,31 @@ void loop()
     set_Time = false;
   }
 
-  if (setDC)
-  {
-    iDC = atoi(dcStr);
-#ifdef HBRIDGE
-    // Note that this logic is the opposite of that used
-    // in the pidHBcontrol() function.
-    if (iDC < 0)
-    { // Cooling case
-      Timer3.pwm(PWM_PIN_A, 0);// The number of NOPs will have 
-                               // to be experimentally verified!
-      NOP10 // Make sure phase A is completely off!
-      NOP10
-      NOP10
-      NOP10
-      Timer3.pwm(PWM_PIN_B, iDC);// Reads low 10 bits, so sign doesn't matter.
-    }
-    else
-    { // Heating case:
-      Timer3.pwm(PWM_PIN_B, 0);
-      NOP10 // Make sure phase B is completely off!
-      NOP10
-      NOP10
-      NOP10
-      Timer3.pwm(PWM_PIN_A, iDC);
-    }
-#elifdef SINGLEPHASE
-    if (iDC < 0)iDC = 0;// Saturate duty cycles below zero or above 1023.
-    if (iDC > 1023) iDC = 1023;
-    Timer3.pwm(HEATER_PIN, iDC);
-#endif
-    setDC = false;
-    for (i = 0; i < sizeof(dcStr); i++) // Flush dcStr buffer.
-    {
-      dcStr[i] = '\0';
-    }
-  }
-
   if (readTemp)
   {
-#ifdef TWOTC
-    temp1 = ReadTemperature(CSs[0]);
-    temp2 = ReadTemperature(CSs[1]);
-#else
     temp1 = ReadTemperature(CSs[0]);
     temp2 = ReadTemperature(CSs[1]);
     temp3 = ReadTemperature(CSs[2]);
     temp4 = ReadTemperature(CSs[3]);
     temp5 = ReadTemperature(CSs[4]);
     temp6 = ReadTemperature(CSs[5]);
-#endif
-if (temp1 >= 120) 
-{ // Shut down if control temp > 120 degrees C.
-#ifdef HBRIDGE
-Timer3.pwm(PWM_PIN_A, 0);//Turn both phases off!
-Timer3.pwm(PWM_PIN_B, 0);
-#elifdef SINGLEPHASE
-Timer3.pwm(HEATER_PIN, 0);//Set DC to zero!
-#elifdef THREEPHASE
-Timer3.pwm(HEATER_PIN, 0);//Set DC to zero!
-Timer3.pwm(PWM_PIN_A, 0);//Turn all 3 phases off!
-Timer3.pwm(PWM_PIN_B, 0);
-Timer3.pwm(PWM_PIN_C, 0);
-#endif
-  noInterrupts();
-  logfile.close();
-  while (1); //Stop here now!
-}
+      if (temp1 >= 120) 
+        { // Shut down if control temp > 120 degrees C.
+
+          Timer3.pwm(PWM_PIN_A, 0);//Turn all 3 phases off!
+          Timer3.pwm(PWM_PIN_B, 0);
+          Timer3.pwm(PWM_PIN_C, 0);
+          noInterrupts();
+          logfile.close();
+          while (1); //Stop here now!
+  }
     //  if(record){ // May cache data for block (512 byte) write later...
     //TC1_temp[numDataPoints] = temp1;
     //TC2_temp[numDataPoints] = temp2;
     //  }//Always print the data out for now...
     //  else{
-  if(monitorData)
+if(monitorData)
   {
-#ifdef TWOTC
-    Serial.print(ttime);
-    Serial.print('\t');
-    Serial.print(temp1);
-    Serial.print('\t');
-    Serial.print(temp2);
-    Serial.print('\n');
-#else
     Serial.print(ttime);
     Serial.print('\t');
     Serial.print(temp1);
@@ -1457,11 +1288,14 @@ Timer3.pwm(PWM_PIN_C, 0);
     Serial.print('\t');
     Serial.print(temp6);
     Serial.print('\t');
-    Serial.print(iDC);//Current duty cycle
+    Serial.print(iDC1);//Current duty cycle Phase 1
+    Serial.print('\t');
+    Serial.print(iDC2);//Current duty cycle Phase 2
+    Serial.print('\t');
+    Serial.print(iDC3);//Current duty cycle Phase 3
     Serial.print('\n');
     //     }
-#endif
-  }
+}
     numDataPoints++;
     readTemp = false;
     pidUpdate = true;
@@ -1479,11 +1313,7 @@ Timer3.pwm(PWM_PIN_C, 0);
   //if(powerOn){//Safety wrapper around PWM output
   if (pidUpdate && controlOn)
   {
-#ifdef HBRIDGE
-    pidHBcontrol();
-#else
     PID_Control();
-#endif
     pidUpdate = false;
   }
   // }
@@ -1496,22 +1326,16 @@ if(setFanSpeed)
   setFanSpeed = false;
 }
 
- if (allOff)
- {
-#ifdef HBRIDGE
-Timer3.pwm(PWM_PIN_A, 0);//Turn both phases off!
-Timer3.pwm(PWM_PIN_B, 0);
-#elifdef SINGLEPHASE
-Timer3.pwm(HEATER_PIN, 0);//Set DC to zero!
-#elifdef THREEPHASE
-Timer3.pwm(PWM_PIN_A, 0);//Turn all 3 phases off!
-Timer3.pwm(PWM_PIN_B, 0);
-Timer3.pwm(PWM_PIN_C, 0);
-#endif
-    noInterrupts();
-    SPI.setDataMode(SPI_MODE0);
-    logfile.close();
-    while (allOff); //Stop here now!
+if (allOff)
+{
+
+  Timer3.pwm(PWM_PIN_A, 0);//Turn all 3 phases off!
+  Timer3.pwm(PWM_PIN_B, 0);
+  Timer3.pwm(PWM_PIN_C, 0);
+  noInterrupts();
+  SPI.setDataMode(SPI_MODE0);
+  logfile.close();
+  while (allOff); //Stop here now!
   }
 }
 ////////////  End Main Loop /////////////////
