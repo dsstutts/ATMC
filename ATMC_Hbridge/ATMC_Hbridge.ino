@@ -969,9 +969,19 @@ if (*inbuffPtr == 'f')
 
 void setup()
 {
+  while (!Serial); // for Leonardo/Micro/Zero
+  Serial.begin(250000);
+  Serial.println("READY!  \n");
+  //Serial.begin(2000000);
+  //Serial.begin(500000);
+  //Serial.begin(1000000);// Works!
+  //Serial.begin(2000000);// Works too!  Holy Cow!
   EEPROM.get(eeAcqRateAddr, Interval);// Below we handle invalid cases:
   if ((Interval <= 0) || (Interval > 9) || isnan(Interval)) Interval = 1; //Set default update index.
   // Reading an empty (not yet assigned a value) EEPROM register returns NAN.
+  Serial.print("Interval at top of setup = ");
+  Serial.print(Interval);
+  Serial.print("\n\r");
 
   Ts = updateIntervals[Interval] / 1000.0; // Set sampling rate.
   // put your setup code here, to run once:
@@ -982,23 +992,16 @@ void setup()
 
   InputBufferIndex = 0;
   //Timer1.initialize(200000);// 200 ms
-  Timer1.initialize(((long)updateIntervals[1]) * 1000); // Set default update interval.
+  Timer1.initialize(((long)updateIntervals[Interval]) * 1000); // Set default update interval.
   Timer1.attachInterrupt(ReadData);
   Timer3.initialize(400); // 40 us => 25 kHz PWM frequency 400->2.5kHz
   //Timer5.initialize(500000); // May use later...
   //Timer5.attachInterrupt(callback function of some use...);
-  while (!Serial); // for Leonardo/Micro/Zero
-  Serial.begin(250000);
-  //Serial.begin(2000000);
-  //Serial.begin(500000);
-  //Serial.begin(1000000);// Works!
-  //Serial.begin(2000000);// Works too!  Holy Cow!
 
   SPI.begin();
   SPI.setClockDivider(SPI_CLOCK_DIV2);
   //SPI.setDataMode(SPI_MODE0);// SPI Mode 0 for SD card.
 
-  Serial.println("READY!  \n");
   if (! rtc.begin()) {
     Serial.println("Couldn't find RTC");
     while (1);
