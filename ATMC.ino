@@ -1171,7 +1171,7 @@ void setup()
   //Timer1.initialize(200000);// 200 ms
   Timer1.initialize(((long)updateIntervals[Interval]) * 1000); // Set default 
   Timer1.attachInterrupt(ReadData);                           // update interval.
-  Timer3.initialize(40); // 40 us => 25 kHz PWM frequency
+
 #ifdef HBRIDGE
   Timer3.pwm(PWM_PIN_A, 0);
   Timer3.pwm(PWM_PIN_B, 0);
