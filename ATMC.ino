@@ -103,7 +103,7 @@
 // Conditional precompiler directive for development mode:
 //#define DEVMODE
 // Conditional precompiler directive for 2 thermocouple case (1st development prototype)
-//#define TWOTC 
+#define TWOTC 
 // Conditional precompiler directive for controlling H-Bridge output:
 //#define HBRIDGE 
 //#define THREEPHASE
@@ -190,6 +190,10 @@ String FileName = "";
 String dataString = "";
 String *dataStringPtr;
 String comma = ",";
+String versStr;
+String versDate = __DATE__;
+String versTime = __TIME__;
+
 //byte RegisterValues[] = {0x90,  0x03,   0xFC,   0x7F,   0xC0,   0x07,     \
 0xFF,     0x80,     0x00,     0x00 };//Type K Thermocouple
 byte RegisterValues[] =   {0x90,  0x07,   0xFC,   0x7F,   0xC0,   0x07,     \
@@ -310,12 +314,12 @@ const char HelpText[] PROGMEM = {"THC supports the following commands:\r\n \\
     7 --> .8 sec\r\n \\
     8 --> .9 sec\r\n \\
     9 --> 1.0 sec\r\n \\
-    T# -- Set the x = 0 boundary temperature to # degrees C\r\n \\
-       thms -- set time where h,m, and s are hours, minutes, seconds integers \r\n \\
-       ty## -- set year where ## are the last two digits \r\n \\
-       tr## -- set month where ## are the digits of the month \r\n \\
-       td## -- set day \r\n \\
-       tt -- Show the current time.\r\n\ \\
+  T# -- Set the x = 0 boundary temperature to # degrees C\r\n \\
+  th#m#s# -- set time where h,m, and s are hours, minutes, seconds and #, integers \r\n \\
+  ty## -- set year where ## are the last two digits \r\n \\
+  tr## -- set month where ## are the digits of the month \r\n \\
+  td## -- set day \r\n \\
+  tt -- Show the current time.\r\n\ \\
   gg -- Report current PID gains.\r\n \\
      gp#i#d# -- Set PID gains, where # denotes floating point numbers.\r\n \\
      Note that while you may set one or two at a time, you must enter the PID \
@@ -1067,6 +1071,7 @@ if (*inbuffPtr == 'f')
 
 void setup()
 {
+  versStr.reserve(30);// Reserve space for version string
   EEPROM.get(eeAcqRateAddr, Interval);// Below we handle invalid cases:
   if ((Interval <= 0) || (Interval > 9) || isnan(Interval)) Interval = 1; //Set default update index.
   // Reading an empty (not yet assigned a value) EEPROM register returns NAN.
@@ -1165,9 +1170,10 @@ void setup()
   Serial.print(pidGains.Kd);
   Serial.print("\n");
   EEPROM.get( eeAcqRateAddr, Interval);
+  Serial.print("Interval = ");
   Serial.print(Interval);
   Serial.print("\n");
-  Ts = updateIntervals[Interval] / 1000.0; // Set default sampling rate.
+  //Ts = updateIntervals[Interval] / 1000.0; // Set default sampling rate.
   //Timer1.initialize(200000);// 200 ms
   Timer1.initialize(((long)updateIntervals[Interval]) * 1000); // Set default 
   Timer1.attachInterrupt(ReadData);                           // update interval.
@@ -1179,6 +1185,9 @@ void setup()
   Timer3.pwm(HEATER_PIN, 0);//Start with zero duty cycle
 #endif
   delay(100);
+  versStr = "ATMC Built on "+versDate+" at "+versTime;
+  Serial.print(versStr);
+  Serial.print("\n");
 }
 ///////////// End setup ////////////
 ///////////// Main Loop ////////////
@@ -1276,6 +1285,8 @@ void loop()
       {
         // only open a new file if it doesn't exist
         logfile = SD.open(filename, FILE_WRITE);
+        logfile.print(versStr);
+        logfile.print("\n");
         logfile.print(now.year(), DEC);
         logfile.print('/');
         logfile.print(now.month(), DEC);

@@ -1089,9 +1089,9 @@ void loop()
 
   if (parseCommands)
   {
-    Serial.print("Just before parser\n\r");
+    //Serial.print("Just before parser\n\r");
     parseSerialInput();
-    Serial.print("Just after parser\n\r");
+    //Serial.print("Just after parser\n\r");
     Serial.print("Set temp = ");
     Serial.print(setTemp);
     Serial.print("\n\r");
