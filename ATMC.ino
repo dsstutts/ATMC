@@ -822,7 +822,11 @@ void parseSerialInput(void) {
     return;
   }
 
-
+  if(*inbuffPtr == 'l')
+    {
+      ls = true;
+      return;
+    }
   if (*inbuffPtr == 's') {
     *inbuffPtr++;//increment pointer to second character
     if (*inbuffPtr++ == 's') { //Set print settings flag and return.
