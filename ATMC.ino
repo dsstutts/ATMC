@@ -162,9 +162,9 @@
 ////////////////////////////////
 
 ///////// Globals ////////////.
-// These control the data acquisition rate from 200 ms to 1 s:
+// These control the data acquisition rate from 200 ms to 6 s:
 double updateIntervals[] = {100.0, 200.0, 300.0, 400.0, 500.0, 600.0, 700.0, \
-800.0, 900.0, 1000.0};
+800.0, 900.0, 1000.0, 60000.0};
 double *updateIntPtr = updateIntervals;
 volatile char inbuff[200];
 volatile char *inbuffPtr = inbuff;
@@ -229,11 +229,13 @@ boolean record = false;
 boolean ledState = LOW;
 boolean saveData = false;
 boolean allOff = false;
+boolean controlErr1 = false;
 boolean powerOn = false;
 boolean ls = false;// List SD card directory flag
-unsigned int Interval = 9;
+unsigned int Interval = 9;//default Interval
 boolean printAcqRate = false;
 boolean setAcqRate = false;
+
 double  acqInterval = 0;
 #if defined TWOTC
 double temp1;
@@ -294,6 +296,7 @@ char myChar;
 boolean Help = false;
 
 const char fileCreateerror[] PROGMEM = "Couldn't create file\n";//Store in program memory
+const char controlError1[] PROGMEM = "Invalid control Interval\n";
 const char HelpText[] PROGMEM = {"THC supports the following commands:\r\n \\
   A -- Control, acquire and store data\r\n \\
   a -- Stop everything and save data; wait until restart.\r\n \\
@@ -314,6 +317,7 @@ const char HelpText[] PROGMEM = {"THC supports the following commands:\r\n \\
     7 --> .8 sec\r\n \\
     8 --> .9 sec\r\n \\
     9 --> 1.0 sec\r\n \\
+    10 --> 60 sec\r\n \\
   T# -- Set the x = 0 boundary temperature to # degrees C\r\n \\
   th#m#s# -- set time where h,m, and s are hours, minutes, seconds and #, integers \r\n \\
   ty## -- set year where ## are the last two digits \r\n \\
@@ -552,6 +556,24 @@ void file_err(void)
   while (1); //Stop here.
 }
 
+void stopAll()
+{
+#ifdef HBRIDGE
+Timer3.pwm(PWM_PIN_A, 0);//Turn both phases off!
+Timer3.pwm(PWM_PIN_B, 0);
+#elifdef SINGLEPHASE
+Timer3.pwm(HEATER_PIN, 0);//Set DC to zero!
+#elifdef THREEPHASE
+Timer3.pwm(PWM_PIN_A, 0);//Turn all 3 phases off!
+Timer3.pwm(PWM_PIN_B, 0);
+Timer3.pwm(PWM_PIN_C, 0);
+#endif
+    noInterrupts();
+    SPI.setDataMode(SPI_MODE0);
+    logfile.close();
+    while (allOff); //Stop here now!
+}
+
 #ifdef HBRIDGE
 
 void pidHBcontrol()
@@ -735,6 +757,7 @@ void parseSerialInput(void) {
     createFile = true;
     numDataPoints = 0;
     ttime = 0.0;
+    if(Interval>9) controlErr1 = true;
     return;
   }
 
@@ -806,7 +829,7 @@ void parseSerialInput(void) {
     return;
   } // End of if W
 
-  if (*inbuffPtr == 'c') { //S.
+  if (*inbuffPtr == 'c') { 
     saveData = false;
     allOff = true;
     return;
@@ -839,12 +862,13 @@ void parseSerialInput(void) {
       setAcqRate = true;
       while ((*inbuffPtr != '\0')) {
         if ((*inbuffPtr >= '0') && (*inbuffPtr <= '9')) {
-          dataStr[0] = *inbuffPtr;//Make sure they're numeric!  
+          dataStr[i] = *inbuffPtr;//Make sure they're numeric!  
         }
         *inbuffPtr++;//Increment buffer pointer.
         i++;
       }
       Interval = (unsigned int)atoi(dataStr);//
+      if(controlOn&&(Interval>9))controlErr1 = true;//Trap invalid control update interval error
     }//End else
   }// End if s
 if (*inbuffPtr == 'f')
@@ -852,7 +876,7 @@ if (*inbuffPtr == 'f')
    while ((*inbuffPtr != '\0')) 
    {
         if ((*inbuffPtr >= '0') && (*inbuffPtr <= '9')) {
-          dataStr[0] = *inbuffPtr;//Make sure they're numeric!  
+          dataStr[i] = *inbuffPtr;//Make sure they're numeric!  
         }
         *inbuffPtr++;//Increment buffer pointer.
         i++;
@@ -1089,7 +1113,7 @@ void setup()
 
   InputBufferIndex = 0;
   //Timer1.initialize(200000);// 200 ms
-  Timer1.initialize(((long)updateIntervals[1]) * 1000); // Set default update interval.
+  Timer1.initialize(((long)updateIntervals[Interval]) * 1000); // Set default update interval.
   Timer1.attachInterrupt(ReadData);
   Timer3.initialize(40); // 40 us => 25 kHz PWM frequency
   //Timer5.initialize(500000); // May use later...
@@ -1179,7 +1203,7 @@ void setup()
   Serial.print("\n");
   //Ts = updateIntervals[Interval] / 1000.0; // Set default sampling rate.
   //Timer1.initialize(200000);// 200 ms
-  Timer1.initialize(((long)updateIntervals[Interval]) * 1000); // Set default 
+  Timer1.initialize(((long)updateIntervals[Interval]) * 1000); // Set  
   Timer1.attachInterrupt(ReadData);                           // update interval.
 
 #ifdef HBRIDGE
@@ -1208,9 +1232,23 @@ void loop()
     }
     inbuffPtr = inbuff;// Point the input string pointer back to the beginning.
     parseCommands = false;
+
+     if(controlErr1)// Trap invalid control update rate error
+   {
+    int errLen = strlen_P(controlError1);
+    for (j = 0;j < errLen;j++)
+    {
+    myChar = pgm_read_byte_near(controlError1 + j);
+    Serial.print(myChar);
+    }
+    stopAll();
+   }
   }
 
   if (setAcqRate) {
+   Serial.print("Interval = \n");
+   Serial.print(Interval);
+   Serial.print("\n");
     Timer1.initialize(((long)updateIntervals[Interval]) * 1000);
     Ts = updateIntervals[Interval] / 1000.0; // Set default sampling rate.
     EEPROM.put(eeAcqRateAddr, Interval);// Save setting.
