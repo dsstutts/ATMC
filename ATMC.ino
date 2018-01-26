@@ -164,7 +164,7 @@
 ///////// Globals ////////////.
 // These control the data acquisition rate from 200 ms to 6 s:
 double updateIntervals[] = {100.0, 200.0, 300.0, 400.0, 500.0, 600.0, 700.0, \
-800.0, 900.0, 1000.0, 60000.0};
+800.0, 900.0, 1000.0, 4000.0};
 double *updateIntPtr = updateIntervals;
 volatile char inbuff[200];
 volatile char *inbuffPtr = inbuff;
@@ -317,7 +317,7 @@ const char HelpText[] PROGMEM = {"THC supports the following commands:\r\n \\
     7 --> .8 sec\r\n \\
     8 --> .9 sec\r\n \\
     9 --> 1.0 sec\r\n \\
-    10 --> 60 sec\r\n \\
+    10 --> 4 sec\r\n \\
   T# -- Set the x = 0 boundary temperature to # degrees C\r\n \\
   th#m#s# -- set time where h,m, and s are hours, minutes, seconds and #, integers \r\n \\
   ty## -- set year where ## are the last two digits \r\n \\
