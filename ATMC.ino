@@ -669,7 +669,7 @@ void PID_Control(void)
   iDC1 = (int)DC3;// Cast to int
   if (iDC3 >= 1023)iDC3 = 1023;
   if (iDC3 <= 0)iDC3 = 0;
-  Timer3.pwm(PWM_PIN_C iDC3);//Set DC
+  Timer3.pwm(PWM_PIN_C, iDC3);//Set DC
 }
 #endif
 
@@ -868,7 +868,7 @@ void parseSerialInput(void) {
         i++;
       }
       Interval = (unsigned int)atoi(dataStr);//
-      if(controlOn&&(Interval>9))controlErr1 = true;//Trap invalid control update interval error
+      if(controlOn&&(Interval>10))controlErr1 = true;//Trap invalid control update interval error
     }//End else
   }// End if s
 if (*inbuffPtr == 'f')

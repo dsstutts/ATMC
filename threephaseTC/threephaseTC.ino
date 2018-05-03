@@ -74,7 +74,7 @@
 #include <EEPROM.h>
 #include <TimerOne.h>
 #include <TimerThree.h>
-#include "TimerFive.h"
+//#include "TimerFive.h"
 #include <Wire.h>
 #include "RTClib.h"
 #include <stdarg.h>
@@ -130,7 +130,7 @@
 ///////// Globals ////////////.
 // These control the data acquisition rate from 200 ms to 1 s:
 double updateIntervals[] = {100.0, 200.0, 300.0, 400.0, 500.0, 600.0, 700.0, \
-800.0, 900.0, 1000.0};
+800.0, 900.0, 1000.0, 4000.0};
 double *updateIntPtr = updateIntervals;
 volatile char inbuff[200];
 volatile char *inbuffPtr = inbuff;
@@ -156,6 +156,10 @@ String FileName = "";
 String dataString = "";
 String *dataStringPtr;
 String comma = ",";
+String versStr;
+String versDate = __DATE__;
+String versTime = __TIME__;
+
 //byte RegisterValues[] = {0x90,  0x03,   0xFC,   0x7F,   0xC0,   0x07,     \
 0xFF,     0x80,     0x00,     0x00 };//Type K Thermocouple
 byte RegisterValues[] =   {0x90,  0x07,   0xFC,   0x7F,   0xC0,   0x07,     \
@@ -189,6 +193,7 @@ boolean record = false;
 boolean ledState = LOW;
 boolean saveData = false;
 boolean allOff = false;
+boolean controlErr1 = false;
 boolean powerOn = false;
 boolean ls = false;// List SD card directory flag
 unsigned int Interval = 9;
@@ -251,6 +256,7 @@ char myChar;
 boolean Help = false;
 
 const char fileCreateerror[] PROGMEM = "Couldn't create file\n";//Store in program memory
+const char controlError1[] PROGMEM = "Invalid control Interval\n";
 const char HelpText[] PROGMEM = {"THC supports the following commands:\r\n \\
   A -- Control, acquire and store data\r\n \\
   a -- Stop everything and save data; wait until restart.\r\n \\
@@ -271,8 +277,9 @@ const char HelpText[] PROGMEM = {"THC supports the following commands:\r\n \\
     7 --> .8 sec\r\n \\
     8 --> .9 sec\r\n \\
     9 --> 1.0 sec\r\n \\
+   10 --> 4 sec\r\n \\
     T# -- Set the x = 0 boundary temperature to # degrees C\r\n \\
-       thms -- set time where h,m, and s are hours, minutes, seconds integers \r\n \\
+       th#m#s# -- set time where h,m, and s are hours, minutes, seconds and #, integers \r\n \\
        ty## -- set year where ## are the last two digits \r\n \\
        tr## -- set month where ## are the digits of the month \r\n \\
        td## -- set day \r\n \\
@@ -511,6 +518,19 @@ void file_err(void)
   while (1); //Stop here.
 }
 
+void stopAll()
+{
+
+Timer3.pwm(PWM_PIN_A, 0);//Turn all 3 phases off!
+Timer3.pwm(PWM_PIN_B, 0);
+Timer3.pwm(PWM_PIN_C, 0);
+    noInterrupts();
+    SPI.setDataMode(SPI_MODE0);
+    logfile.close();
+    while (allOff); //Stop here now!
+}
+
+
 void PID_Control(void)
 //
 // Here we assume that the same PID gains can be used
@@ -625,6 +645,7 @@ void parseSerialInput(void) {
     createFile = true;
     numDataPoints = 0;
     ttime = 0.0;
+    if(Interval>9) controlErr1 = true;
     return;
   }
 
@@ -712,6 +733,11 @@ void parseSerialInput(void) {
     return;
   }
 
+  if(*inbuffPtr == 'l')
+    {
+      ls = true;
+      return;
+    }
 
   if (*inbuffPtr == 's') {
     *inbuffPtr++;//increment pointer to second character
@@ -725,12 +751,14 @@ void parseSerialInput(void) {
       setAcqRate = true;
       while ((*inbuffPtr != '\0')) {
         if ((*inbuffPtr >= '0') && (*inbuffPtr <= '9')) {
-          dataStr[0] = *inbuffPtr;//Make sure they're numeric!  
+          dataStr[i] = *inbuffPtr;//Make sure they're numeric!  
         }
         *inbuffPtr++;//Increment buffer pointer.
         i++;
       }
       Interval = (unsigned int)atoi(dataStr);//
+      if(controlOn&&(Interval>9))controlErr1 = true;//Trap invalid control update interval error
+
     }//End else
   }// End if s
 if (*inbuffPtr == 'f')
@@ -738,7 +766,7 @@ if (*inbuffPtr == 'f')
    while ((*inbuffPtr != '\0')) 
    {
         if ((*inbuffPtr >= '0') && (*inbuffPtr <= '9')) {
-          dataStr[0] = *inbuffPtr;//Make sure they're numeric!  
+          dataStr[i] = *inbuffPtr;//Make sure they're numeric!  
         }
         *inbuffPtr++;//Increment buffer pointer.
         i++;
@@ -961,6 +989,7 @@ if (*inbuffPtr == 'f')
 
 void setup()
 {
+  versStr.reserve(30);// Reserve space for version string
   EEPROM.get(eeAcqRateAddr, Interval);// Below we handle invalid cases:
   if ((Interval <= 0) || (Interval > 9) || isnan(Interval)) Interval = 1; //Set default update index.
   // Reading an empty (not yet assigned a value) EEPROM register returns NAN.
@@ -974,13 +1003,14 @@ void setup()
 
   InputBufferIndex = 0;
   //Timer1.initialize(200000);// 200 ms
-  Timer1.initialize(((long)updateIntervals[1]) * 1000); // Set default update interval.
+  Timer1.initialize(((long)updateIntervals[Interval]) * 1000); // Set default update interval.
   Timer1.attachInterrupt(ReadData);
   Timer3.initialize(40); // 40 us => 25 kHz PWM frequency
   //Timer5.initialize(500000); // May use later...
   //Timer5.attachInterrupt(callback function of some use...);
   while (!Serial); // for Leonardo/Micro/Zero
   Serial.begin(250000);
+  //Serial.begin(115200);
   //Serial.begin(2000000);
   //Serial.begin(500000);
   //Serial.begin(1000000);// Works!
@@ -1061,11 +1091,10 @@ void setup()
   EEPROM.get( eeAcqRateAddr, Interval);
   Serial.print(Interval);
   Serial.print("\n");
-  Ts = updateIntervals[Interval] / 1000.0; // Set default sampling rate.
+  //Ts = updateIntervals[Interval] / 1000.0; // Set default sampling rate.
   //Timer1.initialize(200000);// 200 ms
   Timer1.initialize(((long)updateIntervals[Interval]) * 1000); // Set default 
   Timer1.attachInterrupt(ReadData);                           // update interval.
-  Timer3.initialize(40); // 40 us => 25 kHz PWM frequency
   delay(100);
 }
 ///////////// End setup ////////////
