@@ -1112,9 +1112,24 @@ void loop()
     }
     inbuffPtr = inbuff;// Point the input string pointer back to the beginning.
     parseCommands = false;
+  if(controlErr1)// Trap invalid control update rate error
+   {
+     int errLen = strlen_P(controlError1);
+     for (j = 0;j < errLen;j++)
+      {
+        myChar = pgm_read_byte_near(controlError1 + j);
+        Serial.print(myChar);
+    }
+    stopAll();
+   } 
   }
+  
 
   if (setAcqRate) {
+    Serial.print("Interval = \n");
+    Serial.print(Interval);
+    Serial.print("\n");
+
     Timer1.initialize(((long)updateIntervals[Interval]) * 1000);
     Ts = updateIntervals[Interval] / 1000.0; // Set default sampling rate.
     EEPROM.put(eeAcqRateAddr, Interval);// Save setting.
@@ -1193,6 +1208,8 @@ void loop()
       {
         // only open a new file if it doesn't exist
         logfile = SD.open(filename, FILE_WRITE);
+        logfile.print(versStr);
+        logfile.print("\n");
         logfile.print(now.year(), DEC);
         logfile.print('/');
         logfile.print(now.month(), DEC);
