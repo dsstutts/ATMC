@@ -117,7 +117,7 @@
 #define MAX31856_CS5 8// SPI CS for fifth MAX31856 thermocouple interface
 #define MAX31856_CS6 9// SPI CS for sixth MAX31856 thermocouple interface
 
-#define NUM_TCs 6 // Number of thermocouples
+#define NUM_TCs 6 // Number of thermocouples (depends on which of them are working!)
 
 #define NUM31856REGs 10// Number of special function registers on the MAX31856
 #define TYPE_K 0x03
@@ -128,7 +128,7 @@
 ////////////////////////////////
 
 ///////// Globals ////////////.
-// These control the data acquisition rate from 200 ms to 1 s:
+// These control the data acquisition rate from 200 ms to 4 s:
 double updateIntervals[] = {100.0, 200.0, 300.0, 400.0, 500.0, 600.0, 700.0, \
 800.0, 900.0, 1000.0, 4000.0};
 double *updateIntPtr = updateIntervals;
@@ -149,6 +149,7 @@ char MonthStr[6];
 char DayStr[6];
 char dcStr[5];
 char tempStr[10];
+char setPhase = 0;
 String *dcStrPtr;
 File DataFile;
 String FileName = "";
@@ -184,8 +185,13 @@ boolean setGains = false;
 boolean setKp = false;
 boolean setKi = false;
 boolean setKd = false;
+boolean setphaseA = false;
+boolean setphaseB = false;
+boolean setphaseC = false;
 boolean setPID = false;
-boolean eeGainsSet = false;
+boolean eeGainsSetA = false;
+boolean eeGainsSetB = false;
+boolean eeGainsSetC = false;
 boolean reportGains = false;
 boolean createFile = false;// Data file creation flag
 boolean readTemp = false;
@@ -224,12 +230,12 @@ double derr3 = 0.0, ierr3 = 0.0;
 
 // Set some default gains:
 double Kp = 200.0;
-double DC1 = 0.0;
-double DC2 = 0.0;
-double DC3 = 0.0;
-int iDC1 = 0;
-int iDC2 = 0;
-int iDC3 = 0;
+double DC_A = 0.0;
+double DC_B = 0.0;
+double DC_C = 0.0;
+int iDC_A = 0;
+int iDC_B = 0;
+int iDC_C = 0;
 int fanDC = 0;
 boolean KpSet = false;
 
@@ -277,7 +283,7 @@ const char HelpText[] PROGMEM = {"THC supports the following commands:\r\n \\
     7 --> .8 sec\r\n \\
     8 --> .9 sec\r\n \\
     9 --> 1.0 sec\r\n \\
-   10 --> 4 sec\r\n \\
+   10 --> 4.0 sec\r\n \\
     T# -- Set the x = 0 boundary temperature to # degrees C\r\n \\
        th#m#s# -- set time where h,m, and s are hours, minutes, seconds and #, integers \r\n \\
        ty## -- set year where ## are the last two digits \r\n \\
@@ -292,24 +298,37 @@ z -- Monitor data by printing to the serial monitor -- toggle logic.\r\n\ \\
 W#### -- Simultaneously set duty cycle and log data, where #### represents the \
 duty cycle from 0 to 1023.\r\n"
 };
-//12 byte PID gains structure:
-struct PID_Gains {
+// 12 byte PID gains structure type definition:
+typedef struct {
   double Kp;
   double Ki;
   double Kd;
-};
+} pid_Gains_t;
+
+// Instantiate PID gains structs:
+pid_Gains_t PID_GainsA;
+pid_Gains_t PID_GainsB;
+pid_Gains_t PID_GainsC;
+//Instantiate default gains:
+pid_Gains_t PID_Gains_Default = {200, 2, 60};
+
+
 unsigned int Year;
 byte Month;
 byte Day;
 byte Hour;
 byte Minute;
 byte Second;
-struct PID_Gains pidGains;
+
 ///////// EEPROM Addresses //////
-byte eeGainSetAddr = 0;// 1 byte
-byte eepidGainsAddr = 1;// 12 bytes
-byte eeAcqRateAddr = 13;// 2 bytes
-// Total EEPROM bytes stored: 15 so far...
+byte eeGain_A_SetAddr = 0;// 1 byte
+byte eeGain_B_SetAddr = 1;// 1 byte
+byte eeGain_C_SetAddr = 2;// 1 byte
+byte eepidGain_A_Addr = 3;// 12 bytes
+byte eepidGain_B_Addr = 15;// 12 bytes
+byte eepidGain_C_Addr = 27;// 12 bytes
+byte eeAcqRateAddr = 39;// 2 bytes
+// Total EEPROM bytes stored: 41 so far...
 /////////////////////////////////
 ////////////////// End of Global Variables ////////
 
@@ -360,6 +379,7 @@ void ReadData(void)
 }
 ///////////// End of ISR definitions ////////
 
+
 ////////// MAX31856 Functions ////////////////
 byte ReadSingleRegister(int Pin, byte Register) {
   digitalWrite(Pin, LOW);
@@ -377,7 +397,6 @@ unsigned long ReadMultipleRegisters(int Pin, byte StartRegister, int count) {
   unsigned  long data = 0;
   SPI.transfer(StartRegister & 0x7F); //force bit 7 to 0 to ensure a read command
   NOP;
-
   for (int i = 0; i < count; i++) {
     data = (data << 8) | SPI.transfer(0); //bitshift left 8 bits, 
   }//                                     then add the next register
@@ -489,19 +508,25 @@ void VerifyData(int CS) {
 }
 
 ////////// End of MAX31856 Functions /////////
-void printGains(void) {
+
+//Pass the address of a gains structure to print:
+void printGains(pid_Gains_t* r, char a) {
+  Serial.print("The gains for Phase\t");
+  Serial.print(a);
+  Serial.print("\t are:\n");
   Serial.print("Kp = ");
   Serial.print('\t');
-  Serial.print(pidGains.Kp);
+  Serial.print(r->Kp);
   Serial.print('\t');
   Serial.print("Ki = ");
   Serial.print('\t');
-  Serial.print(pidGains.Ki);
+  Serial.print(r->Ki);
   Serial.print('\t');
   Serial.print("Kd = ");
-  Serial.print(pidGains.Kd);
+  Serial.print(r->Kd);
   Serial.print('\n');
 }
+
 
 void file_err(void)
 {
@@ -530,6 +555,73 @@ Timer3.pwm(PWM_PIN_C, 0);
     while (allOff); //Stop here now!
 }
 
+void storeGains(byte gainAddr, byte setAddr, double k)
+{
+  noInterrupts();//Don't let this transaction be interrupted!
+  EEPROM.put(gainAddr, k);
+  EEPROM.put(setAddr, 1);//Store the fact that the gains are stored in EPROM.
+  interrupts();
+}
+
+void setPIDGains(pid_Gains_t* r)
+{
+    double k;
+    if (setKp) {
+      k = atof(kpStr);
+      r->Kp = k;
+      for (j = 0; j < sizeof(kpStr); j++)kpStr[j] = '\0'; //Flush the gain buffers
+      setKp = false;
+      if(setphaseA)
+      {
+        storeGains(eepidGain_A_Addr, eeGain_A_SetAddr, k);
+      }
+      if(setphaseB)
+      {
+        storeGains(eepidGain_B_Addr, eeGain_B_SetAddr, k);
+      }
+      if(setphaseC)
+      {
+        storeGains(eepidGain_C_Addr, eeGain_C_SetAddr, k);
+      }
+    }
+    if (setKi) {
+      k = atof(kiStr);
+      r->Ki = k;
+      for (j = 0; j < sizeof(kiStr); j++)kiStr[j] = '\0';
+      setKi = false;
+      if(setphaseA)
+      {
+         storeGains(eepidGain_A_Addr+4, eeGain_A_SetAddr, k);
+      }
+      if(setphaseB)
+      {
+         storeGains(eepidGain_B_Addr+4, eeGain_B_SetAddr, k);
+      }
+      if(setphaseC)
+      {
+         storeGains(eepidGain_C_Addr+4, eeGain_C_SetAddr, k);
+      }
+    }
+    if (setKd) {
+      k = atof(kdStr);
+      r->Kd = k;
+      for (j = 0; j < sizeof(kdStr); j++)kdStr[j] = '\0';
+      setKd = false;
+      if(setphaseA)
+      {
+          storeGains(eepidGain_A_Addr+8, eeGain_A_SetAddr, k);
+      }
+      if(setphaseB)
+      {
+          storeGains(eepidGain_B_Addr+8, eeGain_B_SetAddr, k);
+      }
+       if(setphaseC)
+       {
+          storeGains(eepidGain_C_Addr+8, eeGain_C_SetAddr, k);
+       }
+    }
+  }
+
 
 void PID_Control(void)
 //
@@ -557,21 +649,21 @@ void PID_Control(void)
   Err1[1] = Err1[0];
   Err2[1] = Err2[0];
   Err3[1] = Err3[0];
-  DC1 = pidGains.Kp * Err1[0] + pidGains.Ki * ierr1 * Ts + pidGains.Kd * derr1 / Ts;
-  DC2 = pidGains.Kp * Err2[0] + pidGains.Ki * ierr2 * Ts + pidGains.Kd * derr2 / Ts;
-  DC3 = pidGains.Kp * Err3[0] + pidGains.Ki * ierr3 * Ts + pidGains.Kd * derr3 / Ts;
-  iDC1 = (int)DC1;// Cast to int
-  if (iDC1 >= 1023)iDC1 = 1023;
-  if (iDC1 <= 0)iDC1 = 0;
-  Timer3.pwm(PWM_PIN_A, iDC1);//Set DC
-  iDC1 = (int)DC2;// Cast to int
-  if (iDC2 >= 1023)iDC2 = 1023;
-  if (iDC2 <= 0)iDC2 = 0;
-  Timer3.pwm(PWM_PIN_B, iDC2);//Set DC
-  iDC1 = (int)DC3;// Cast to int
-  if (iDC3 >= 1023)iDC3 = 1023;
-  if (iDC3 <= 0)iDC3 = 0;
-  Timer3.pwm(PWM_PIN_C, iDC3);//Set DC
+  DC_A = PID_GainsA.Kp * Err1[0] + PID_GainsA.Ki * ierr1 * Ts + PID_GainsA.Kd * derr1 / Ts;
+  DC_B = PID_GainsB.Kp * Err2[0] + PID_GainsB.Ki * ierr2 * Ts + PID_GainsB.Kd * derr2 / Ts;
+  DC_C = PID_GainsC.Kp * Err3[0] + PID_GainsC.Ki * ierr3 * Ts + PID_GainsC.Kd * derr3 / Ts;
+  iDC_A = (int)DC_A;// Cast to int
+  if (iDC_A >= 1023)iDC_A = 1023;
+  if (iDC_A <= 0)iDC_A = 0;
+  Timer3.pwm(PWM_PIN_A, iDC_A);//Set DC
+  iDC_B = (int)DC_B;// Cast to int
+  if (iDC_B >= 1023)iDC_B = 1023;
+  if (iDC_B <= 0)iDC_B = 0;
+  Timer3.pwm(PWM_PIN_B, iDC_B);//Set DC
+  iDC_C = (int)DC_C;// Cast to int
+  if (iDC_C >= 1023)iDC_C = 1023;
+  if (iDC_C <= 0)iDC_C = 0;
+  Timer3.pwm(PWM_PIN_C, iDC_C);//Set DC
 }
 
 void WriteToSD(void)
@@ -935,7 +1027,54 @@ if (*inbuffPtr == 'f')
       reportGains = true;
       return;
     }
-    else
+    else if (*inbuffPtr++ == 'A')
+    {
+      *inbuffPtr--;// Decrement pointer
+      setGains = true;
+      setphaseA = true;
+      while (*inbuffPtr != '\0') {
+
+        switch (*inbuffPtr) {
+          case 'p':
+            setKp = true;
+            kpSet = true;
+            break;
+          case 'i':
+            setKi = true;
+            kiSet = true;
+            break;
+          case 'd':
+            setKd = true;
+            kdSet = true;
+            break;
+          default:
+            if (((*inbuffPtr >= '0') && (*inbuffPtr <= '9')) || (*inbuffPtr == '.')) { 
+              if (kdSet) {// Make sure they're numeric!
+                kdStr[k] = *inbuffPtr;
+                kpSet = false;
+                kiSet = false;
+                k++;
+              }
+              if (kiSet) {
+                kiStr[j] = *inbuffPtr;
+                kpSet = false;
+                kdSet = false;
+                j++;
+              }
+              if (kpSet) {
+
+                kpStr[i] = *inbuffPtr;
+                kiSet = false;
+                kdSet = false;
+                i++;
+              }
+            }//End if numeric
+            break;
+        }//End PID switch
+        *inbuffPtr++;
+      }// End PID while
+    } // End of else if on phase A
+    else if (*inbuffPtr++ == 'B')
     {
       *inbuffPtr--;// Decrement pointer
       setGains = true;
@@ -980,7 +1119,54 @@ if (*inbuffPtr == 'f')
         }//End PID switch
         *inbuffPtr++;
       }// End PID while
-    } // End of if else
+    }// End of else if on phase B
+    else if (*inbuffPtr++ == 'C')
+    {
+      *inbuffPtr--;// Decrement pointer
+      setGains = true;
+      setphaseC = true;
+      while (*inbuffPtr != '\0') {
+
+        switch (*inbuffPtr) {
+          case 'p':
+            setKp = true;
+            kpSet = true;
+            break;
+          case 'i':
+            setKi = true;
+            kiSet = true;
+            break;
+          case 'd':
+            setKd = true;
+            kdSet = true;
+            break;
+          default:
+            if (((*inbuffPtr >= '0') && (*inbuffPtr <= '9')) || (*inbuffPtr == '.')) { 
+              if (kdSet) {// Make sure they're numeric!
+                kdStr[k] = *inbuffPtr;
+                kpSet = false;
+                kiSet = false;
+                k++;
+              }
+              if (kiSet) {
+                kiStr[j] = *inbuffPtr;
+                kpSet = false;
+                kdSet = false;
+                j++;
+              }
+              if (kpSet) {
+
+                kpStr[i] = *inbuffPtr;
+                kiSet = false;
+                kdSet = false;
+                i++;
+              }
+            }//End if numeric
+            break;
+        }//End PID switch
+        *inbuffPtr++;
+      }// End PID while
+    }// End of else if on phase C
   }// End of if g
 
 }// End of parseSerialInput
@@ -991,14 +1177,20 @@ void setup()
 {
   versStr.reserve(30);// Reserve space for version string
   EEPROM.get(eeAcqRateAddr, Interval);// Below we handle invalid cases:
-  if ((Interval <= 0) || (Interval > 9) || isnan(Interval)) Interval = 1; //Set default update index.
+  if ((Interval <= 0) || (Interval > 10) || isnan(Interval)) Interval = 1; //Set default update index.
   // Reading an empty (not yet assigned a value) EEPROM register returns NAN.
 
   Ts = updateIntervals[Interval] / 1000.0; // Set sampling rate.
   // put your setup code here, to run once:
   pinMode(DATAREAD_LED, OUTPUT);//Set the data-read activity LED pin to output.
   digitalWrite(DATAREAD_LED, false);
-
+//MAX31856_CS1
+  pinMode(MAX31856_CS1, OUTPUT);
+  pinMode(MAX31856_CS2, OUTPUT);
+  pinMode(MAX31856_CS3, OUTPUT);
+  pinMode(MAX31856_CS4, OUTPUT);
+  pinMode(MAX31856_CS5, OUTPUT);
+  pinMode(MAX31856_CS6, OUTPUT);
   //delay(100);
 
   InputBufferIndex = 0;
@@ -1072,22 +1264,47 @@ void setup()
     VerifyData(CSs[i]);
   }
   //noInterrupts();//The EEPROM driver apparently code uses interrupts,
-  EEPROM.get(eeGainSetAddr, eeGainsSet);// so you can't disable all of them.
-  if (eeGainsSet = 1) {
-    EEPROM.get(eepidGainsAddr, pidGains);
+  EEPROM.get(eeGain_A_SetAddr, eeGainsSetA);// so you can't disable all of them.
+  EEPROM.get(eeGain_B_SetAddr, eeGainsSetB);
+  EEPROM.get(eeGain_C_SetAddr, eeGainsSetC);
+ // Check to see if the gains have been stored in EEPROM
+ // and assign them, or set defaults if not:
+  if (eeGainsSetA = 1) {
+    EEPROM.get(eeGain_A_SetAddr, PID_GainsA);
   }
-  Serial.print("eeGainsSet = :");
-  Serial.print(eeGainsSet);
-  Serial.print("\n");
-  Serial.print("Kp = :");
-  Serial.print(pidGains.Kp);
-  Serial.print("\n");
-  Serial.print("Ki = :");
-  Serial.print(pidGains.Ki);
-  Serial.print("\n");
-  Serial.print("Kd = :");
-  Serial.print(pidGains.Kd);
-  Serial.print("\n");
+  else
+  {
+    PID_GainsA = PID_Gains_Default;
+  }
+
+  if (eeGainsSetB = 1) {
+    EEPROM.get(eeGain_B_SetAddr, PID_GainsB);
+  }
+  else
+  {
+     PID_GainsB = PID_Gains_Default;
+  }
+  
+  if (eeGainsSetC = 1) {
+    EEPROM.get(eeGain_C_SetAddr, PID_GainsC);
+  }
+  else
+  {
+    PID_GainsC = PID_Gains_Default;
+  }
+  
+//  Serial.print("eeGainsSet = :");
+//  Serial.print(eeGainsSet);
+//  Serial.print("\n");
+//  Serial.print("Kp = :");
+//  Serial.print(pidGains.Kp);
+//  Serial.print("\n");
+//  Serial.print("Ki = :");
+//  Serial.print(pidGains.Ki);
+//  Serial.print("\n");
+//  Serial.print("Kd = :");
+//  Serial.print(pidGains.Kd);
+//  Serial.print("\n");
   EEPROM.get( eeAcqRateAddr, Interval);
   Serial.print(Interval);
   Serial.print("\n");
@@ -1124,7 +1341,6 @@ void loop()
    } 
   }
   
-
   if (setAcqRate) {
     Serial.print("Interval = \n");
     Serial.print(Interval);
@@ -1165,32 +1381,54 @@ void loop()
     Serial.print("\n");
     printAcqRate = false;
   }
-  if (reportGains) {
-    printGains();
-    reportGains = false;
-  }
-  if (setGains) {
 
-    if (setKp) {
-      pidGains.Kp = atof(kpStr);
-      for (j = 0; j < sizeof(kpStr); j++)kpStr[j] = '\0'; //Flush the gain buffers
-      setKp = false;
+  if (setGains) {// Global booleans: setphaseA, setphaseB, setphaseC
+    if(setphaseA)
+    {
+      setPIDGains(&PID_GainsA);
+      reportGains = true;
+      setphaseA = false;
     }
-    if (setKi) {
-      pidGains.Ki = atof(kiStr);
-      for (j = 0; j < sizeof(kiStr); j++)kiStr[j] = '\0';
-      setKi = false;
+    if(setphaseB)
+    {
+      setPIDGains(&PID_GainsB);
+      reportGains = true;
+      setphaseB = false;
     }
-    if (setKd) {
-      pidGains.Kd = atof(kdStr);
-      for (j = 0; j < sizeof(kdStr); j++)kdStr[j] = '\0';
-      setKd = false;
+    if(setphaseC)
+    {
+      setPIDGains(&PID_GainsC);
+      reportGains = true;
+      setphaseC = false;
     }
-    noInterrupts();//Don't let this transaction be interrupted!
-    EEPROM.put(eepidGainsAddr, pidGains);
-    EEPROM.put(eeGainSetAddr, 1);//Store the fact that the gains are stored in EPROM.
-    interrupts();
+//
+//    if (setKp) {
+//      pidGains.Kp = atof(kpStr);
+//      for (j = 0; j < sizeof(kpStr); j++)kpStr[j] = '\0'; //Flush the gain buffers
+//      setKp = false;
+//    }
+//    if (setKi) {
+//      pidGains.Ki = atof(kiStr);
+//      for (j = 0; j < sizeof(kiStr); j++)kiStr[j] = '\0';
+//      setKi = false;
+//    }
+//    if (setKd) {
+//      pidGains.Kd = atof(kdStr);
+//      for (j = 0; j < sizeof(kdStr); j++)kdStr[j] = '\0';
+//      setKd = false;
+//    }
+//    noInterrupts();//Don't let this transaction be interrupted!
+//    EEPROM.put(eepidGainsAddr, pidGains);
+//    EEPROM.put(eeGainSetAddr, 1);//Store the fact that the gains are stored in EPROM.
+//    interrupts();
     setGains = false;
+  }
+
+  if (reportGains) {
+    printGains(&PID_GainsA, 'A');
+    printGains(&PID_GainsB, 'B');
+    printGains(&PID_GainsC, 'C');
+    reportGains = false;
   }
 
   if (createFile && saveData)
@@ -1311,7 +1549,7 @@ void loop()
           noInterrupts();
           logfile.close();
           while (1); //Stop here now!
-  }
+        }
     //  if(record){ // May cache data for block (512 byte) write later...
     //TC1_temp[numDataPoints] = temp1;
     //TC2_temp[numDataPoints] = temp2;
@@ -1334,11 +1572,11 @@ if(monitorData)
     Serial.print('\t');
     Serial.print(temp6);
     Serial.print('\t');
-    Serial.print(iDC1);//Current duty cycle Phase 1
+    Serial.print(iDC_A);//Current duty cycle Phase 1
     Serial.print('\t');
-    Serial.print(iDC2);//Current duty cycle Phase 2
+    Serial.print(iDC_B);//Current duty cycle Phase 2
     Serial.print('\t');
-    Serial.print(iDC3);//Current duty cycle Phase 3
+    Serial.print(iDC_C);//Current duty cycle Phase 3
     Serial.print('\n');
     //     }
 }
