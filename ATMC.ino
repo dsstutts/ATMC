@@ -715,7 +715,6 @@ void parseSerialInput(void) {
   boolean kdSet = false;
   char dataStr[2] = {'\0', '\0'};
   unsigned int data = 0;
-  double setTemp;
   byte i = 0;
   byte k = 0;
   byte l = 0;
