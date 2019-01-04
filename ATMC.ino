@@ -318,7 +318,8 @@ const char HelpText[] PROGMEM = {"THC supports the following commands:\r\n \\
     8 --> .9 sec\r\n \\
     9 --> 1.0 sec\r\n \\
     10 --> 4 sec\r\n \\
-  T# -- Set the x = 0 boundary temperature to # degrees C\r\n \\
+  T# -- Set the x = 0 boundary temperature to # degrees C, turn power on, and log data\r\n \\
+  q# -- Set the boundary temperature to # degrees C\r\n \\
   th#m#s# -- set time where h,m, and s are hours, minutes, seconds and #, integers \r\n \\
   ty## -- set year where ## are the last two digits \r\n \\
   tr## -- set month where ## are the digits of the month \r\n \\
@@ -763,6 +764,19 @@ void parseSerialInput(void) {
   if (*inbuffPtr == 'a') { //Stop everything and save data.
     saveData = false;
     allOff = true;
+    return;
+  }
+// Set target temperature only:
+  if (*inbuffPtr == 'q') { //settemp
+    while (*inbuffPtr != '\0') {
+      if (((*inbuffPtr >= '0') && (*inbuffPtr <= '9')) || (*inbuffPtr == '.')) { // Make 
+        tempStr[i] = *inbuffPtr;//                  sure they're numeric!
+        i++;
+      }//End if numeric
+      *inbuffPtr++;
+    }// End duty cycle set while
+    setTemp = atof(tempStr);//convert to float
+    for (j = 0; j < sizeof(tempStr); j++)tempStr[j] = '\0'; //Flush buffer
     return;
   }
 
@@ -1568,6 +1582,3 @@ Timer3.pwm(PWM_PIN_C, 0);
   }
 }
 ////////////  End Main Loop /////////////////
-
-
-
