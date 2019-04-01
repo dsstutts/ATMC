@@ -249,6 +249,7 @@ double temp5;
 double temp6;
 #endif
 double setTemp = 50.0;// Default target temperature
+double DCset = 0;
 double ttime = 0;// Temperature time
 double Ts = 200.0;// Default data acquisition rate.
 // We're currently only using the current and previous errors:
@@ -690,7 +691,7 @@ dataString += ttime + comma + temp1 + comma + temp2;
 #endif
 #else
 dataString += ttime + comma + temp1 + comma + temp2 + comma + temp3 + comma + \
-temp4 + comma + temp5 + comma + temp6;
+temp4 + comma + temp5 + comma + temp6 + comma + iDC;
 #endif
 
 #endif
@@ -806,6 +807,10 @@ void parseSerialInput(void) {
   if (*inbuffPtr == 'C') { //Control Setting case
     readTemp = true;// Always read temp when power on to shut down if T >= 90 C.
     setDC = true;
+    saveData = true;
+    powerOn = true;
+    createFile = true;
+
     openLoop = true;
     numDataPoints = 0;
     ttime = 0.0;
@@ -1452,7 +1457,7 @@ void loop()
       NOP10
       Timer3.pwm(PWM_PIN_A, iDC);
     }
-#elifdef SINGLEPHASE
+#elif SINGLEPHASE
     if (iDC < 0)iDC = 0;// Saturate duty cycles below zero or above 1023.
     if (iDC > 1023) iDC = 1023;
     Timer3.pwm(HEATER_PIN, iDC);
@@ -1482,9 +1487,9 @@ if (temp1 >= 120)
 #ifdef HBRIDGE
 Timer3.pwm(PWM_PIN_A, 0);//Turn both phases off!
 Timer3.pwm(PWM_PIN_B, 0);
-#elifdef SINGLEPHASE
+#elif SINGLEPHASE
 Timer3.pwm(HEATER_PIN, 0);//Set DC to zero!
-#elifdef THREEPHASE
+#elif THREEPHASE
 Timer3.pwm(HEATER_PIN, 0);//Set DC to zero!
 Timer3.pwm(PWM_PIN_A, 0);//Turn all 3 phases off!
 Timer3.pwm(PWM_PIN_B, 0);
@@ -1568,9 +1573,9 @@ if(setFanSpeed)
 #ifdef HBRIDGE
 Timer3.pwm(PWM_PIN_A, 0);//Turn both phases off!
 Timer3.pwm(PWM_PIN_B, 0);
-#elifdef SINGLEPHASE
+#elif SINGLEPHASE
 Timer3.pwm(HEATER_PIN, 0);//Set DC to zero!
-#elifdef THREEPHASE
+#elif THREEPHASE
 Timer3.pwm(PWM_PIN_A, 0);//Turn all 3 phases off!
 Timer3.pwm(PWM_PIN_B, 0);
 Timer3.pwm(PWM_PIN_C, 0);
