@@ -806,12 +806,9 @@ void parseSerialInput(void) {
   //Open loop duty cycle setting:
   if (*inbuffPtr == 'C') { //Control Setting case
     readTemp = true;// Always read temp when power on to shut down if T >= 90 C.
-    setDC = true;
     saveData = true;
     powerOn = true;
     createFile = true;
-
-    openLoop = true;
     numDataPoints = 0;
     ttime = 0.0;
     *inbuffPtr++;
