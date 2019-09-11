@@ -1,15 +1,8 @@
-#include <avr/pgmspace.h>
 #include <EEPROM.h>
 #include <TimerOne.h>
-#include <TimerThree.h>
-#include <Wire.h>
-#include "RTClib.h"
-#include <stdarg.h>
 #include <Arduino.h>
-#include <SD.h>
 #include <SPI.h>
 #include <Adafruit_MAX31856.h>
-#include <string.h>
 
 ///////// Chip Select Pins //////
 #define MAX31856_CS1 42// SPI CS for first MAX31856 thermocouple interface
@@ -21,8 +14,6 @@
 #define TYPE_K 0x03
 #define TYPE_T 0x07
 #define NOP __asm__ __volatile__ ("nop");// Inline no-operation ASM 
-#define DATAREAD_LED 11//     for inserting a 62.5 ns delay used  for MAX31856
-//                            SPI communication and for H-bridge deadtime. 
 //The following executes 10 NOPs in a row for a 625 ns delay:
 #define NOP10 __asm__ __volatile__ ("nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t"\
 "nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t");
@@ -35,10 +26,6 @@ double updateIntervals[] = {100.0, 200.0, 300.0, 400.0, 500.0, 600.0, 700.0, \
 double *updateIntPtr = updateIntervals;
 boolean monitorData = true;
 
-String versStr;
-String versDate = __DATE__;
-String versTime = __TIME__;
-
 //byte RegisterValues[] = {0x90,  0x03,   0xFC,   0x7F,   0xC0,   0x07,     \
 0xFF,     0x80,     0x00,     0x00 };//Type K Thermocouple
 byte RegisterValues[] =   {0x90,  0x07,   0xFC,   0x7F,   0xC0,   0x07,     \
@@ -50,40 +37,27 @@ byte RegisterAddresses[] = {0x00,  0x01,   0x02,   0x03,   0x04,   0x04,     \
 
 int CSs[] = {MAX31856_CS1};
 int CSs2[] = {max1};
+double temp1;
+
 boolean readTemp = false;
-boolean ledState = LOW;
 unsigned int Interval = 9;//default Interval
 boolean printAcqRate = false;
 boolean setAcqRate = false;
-
 double  acqInterval = 0;
-double temp1;
-double temp2;
 double ttime = 0;// Temperature time
 double Ts = 200.0;// Default data acquisition rate.
 
 ///////// EEPROM Addresses //////
-byte eeGainSetAddr = 0;// 1 byte
-byte eepidGainsAddr = 1;// 12 bytes
 byte eeAcqRateAddr = 13;// 2 bytes
 // Total EEPROM bytes stored: 15 so far...
 /////////////////////////////////
 ////////////////// End of Global Variables ////////
-
-////////// Object Instantiations //////////////////
-// Real time clock object
-RTC_PCF8523 rtc;
-////////////// End of Object Instantiations //////////
 
 ////////////// Function Definitions ////////////
 
 ///////// Interrupt Service Routines (ISRs) ///////////////
 void ReadData(void)
 {
-  if (ledState) ledState = false;
-  else
-    ledState = true;
-  digitalWrite(DATAREAD_LED, ledState);
   readTemp = true;
 }
 ///////////// End of ISR definitions ////////
@@ -121,41 +95,6 @@ void WriteRegister(int Pin, byte Register, byte Value) {
   NOP;
   SPI.transfer(Value);
   digitalWrite(Pin, HIGH);
-}
-
-double ReadColdJunction(int Pin) {
-
-  double temperature;
-
-  long data, temperatureOffset;
-
-  data = ReadMultipleRegisters(Pin, 0x08, 4);
-
-  // Register 9 is the temperature offset
-  temperatureOffset = (data & 0x00FF0000) >> 16;
-
-  // Is this a negative number?
-  if (temperatureOffset & 0x80)
-    temperatureOffset |= 0xFFFFFF00;
-
-  // Strip registers 8 and 9, taking care of negative numbers
-  if (data & 0x8000)
-    data |= 0xFFFF0000;
-  else
-    data &= 0x0000FFFF;
-
-  // Remove the 2 LSB's - they aren't used
-  data = data >> 2;
-
-  // Add the temperature offset to the temperature
-  temperature = data + temperatureOffset;
-
-  // Convert to Celsius
-  temperature *= 0.015625;
-
-
-  // Return the temperature
-  return (temperature);
 }
 
 double ReadTemperature(int Pin) {
@@ -223,24 +162,17 @@ void VerifyData(int CS) {
     Serial.println("No discrepancies found");
   }
 }
-
 ////////// End of MAX31856 Functions /////////
 void setup()
 {
-  versStr.reserve(30);// Reserve space for version string
   EEPROM.get(eeAcqRateAddr, Interval);// Below we handle invalid cases:
   if ((Interval <= 0) || (Interval > 9) || isnan(Interval)) Interval = 1; //Set default update index.
   // Reading an empty (not yet assigned a value) EEPROM register returns NAN.
 
   Ts = updateIntervals[Interval] / 1000.0; // Set sampling rate.
   // put your setup code here, to run once:
-  pinMode(DATAREAD_LED, OUTPUT);//Set the data-read activity LED pin to output.
-  digitalWrite(DATAREAD_LED, false);
   Timer1.initialize(((long)updateIntervals[Interval]) * 1000); // Set default update interval.
   Timer1.attachInterrupt(ReadData);
-  Timer3.initialize(40); // 40 us => 25 kHz PWM frequency
-  //Timer5.initialize(500000); // May use later...
-  //Timer5.attachInterrupt(callback function of some use...);
   while (!Serial); // for Leonardo/Micro/Zero
   Serial.begin(250000);
 
@@ -248,17 +180,6 @@ void setup()
   SPI.setClockDivider(SPI_CLOCK_DIV2);
 
   Serial.println("READY!  \n");
-  if (! rtc.begin()) {
-    Serial.println("Couldn't find RTC");
-    while (1);
-  }
-  if (! rtc.initialized())
-  {
-    Serial.println("RTC is NOT running!");
-    // following line sets the RTC to the date & time this sketch was compiled
-    rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
-  }
-
   byte SPIERROR = SPSR;//Read SPI status reg to clear errors; doesn't work.
   delay(100);
   SPI.setClockDivider(SPI_CLOCK_DIV2);//Reset to 7.8 MHz and Mode 3 for MAX31856
@@ -284,15 +205,8 @@ void setup()
   Serial.print("Interval = ");
   Serial.print(Interval);
   Serial.print("\n");
-  //Ts = updateIntervals[Interval] / 1000.0; // Set default sampling rate.
-  //Timer1.initialize(200000);// 200 ms
   Timer1.initialize(((long)updateIntervals[Interval]) * 1000); // Set  
   Timer1.attachInterrupt(ReadData);                           // update interval.
-
-  delay(100);
-  versStr = "ATMC Built on "+versDate+" at "+versTime;
-  Serial.print(versStr);
-  Serial.print("\n");
 }
 ///////////// End setup ////////////
 ///////////// Main Loop ////////////
@@ -320,15 +234,11 @@ void loop()
   if (readTemp)
   {
     temp1 = ReadTemperature(CSs[0]);
-    temp2 = ReadTemperature(CSs[1]);
-
   if(monitorData)
   {
     Serial.print(ttime);
     Serial.print('\t');
     Serial.print(temp1);
-    Serial.print('\t');
-    Serial.print(temp2);
     Serial.print('\n');
 
   }
