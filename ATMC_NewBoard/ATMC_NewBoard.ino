@@ -5,11 +5,33 @@
 #include <Adafruit_MAX31856.h>
 
 ///////// Chip Select Pins //////
-#define MAX31856_CS1 42// SPI CS for first MAX31856 thermocouple interface
-#define max1 43// SPI CS for second MAX31856 thermocouple interface
+//#define MAX31856_CS1 53// SPI CS for first MAX31856 thermocouple interface 16
+#define MAX31856_CS1 16// SPI CS for second MAX31856 thermocouple interface
 #define NUM_TCs 1 // Number of thermocouples
-#define NUM_TCs2 1 // Number of thermocouples
+#define NUM_TCs_Sensing 0 // Number of thermocouples
+/*
+#define MAX31856_CS1 53// SPI CS for first MAX31856 thermocouple interface 16
+#define max1 14// SPI CS for second MAX31856 thermocouple interface
+# max2 5
+#define max3 7
+#define max4 22
+#define max5 24
+#define max6 26
+#define max7 28
+#define max8 30
+#define max9 35
+#define max10 37
+#define max11 33
+#define max12 41
+#define max13 43
+#define max14 39
+#define max15 47
+#define max16 49
+#define max17 45
 
+#define NUM_TCs 1 // Number of thermocouples
+#define NUM_TCs_Sensing 17 // Number of thermocouples
+*/
 #define NUM31856REGs 10// Number of special function registers on the MAX31856
 #define TYPE_K 0x03
 #define TYPE_T 0x07
@@ -36,9 +58,10 @@ byte RegisterAddresses[] = {0x00,  0x01,   0x02,   0x03,   0x04,   0x04,     \
 0x06,     0x07,     0x08,     0x09 };
 
 int CSs[] = {MAX31856_CS1};
-int CSs2[] = {max1};
+int CSs2[] = {};
+//int CSs2[] = {max1,max2,max3,max4,max5,max6,max7,max8,max9,max10,max11,max12,max13,max14,max15,max16,max17};
 double temp1;
-
+double temp2;
 boolean readTemp = false;
 unsigned int Interval = 9;//default Interval
 boolean printAcqRate = false;
@@ -58,7 +81,7 @@ byte eeAcqRateAddr = 13;// 2 bytes
 ///////// Interrupt Service Routines (ISRs) ///////////////
 void ReadData(void)
 {
-  readTemp = true;
+  readTemp = true; //removed LED
 }
 ///////////// End of ISR definitions ////////
 
@@ -96,6 +119,40 @@ void WriteRegister(int Pin, byte Register, byte Value) {
   SPI.transfer(Value);
   digitalWrite(Pin, HIGH);
 }
+double ReadColdJunction(int Pin) {
+
+  double temperature;
+
+  long data, temperatureOffset;
+
+  data = ReadMultipleRegisters(Pin, 0x08, 4);
+
+  // Register 9 is the temperature offset
+  temperatureOffset = (data & 0x00FF0000) >> 16;
+
+  // Is this a negative number?
+  if (temperatureOffset & 0x80)
+    temperatureOffset |= 0xFFFFFF00;
+
+  // Strip registers 8 and 9, taking care of negative numbers
+  if (data & 0x8000)
+    data |= 0xFFFF0000;
+  else
+    data &= 0x0000FFFF;
+
+  // Remove the 2 LSB's - they aren't used
+  data = data >> 2;
+
+  // Add the temperature offset to the temperature
+  temperature = data + temperatureOffset;
+
+  // Convert to Celsius
+  temperature *= 0.015625;
+
+
+  // Return the temperature
+  return (temperature);
+}
 
 double ReadTemperature(int Pin) {
 
@@ -127,7 +184,7 @@ void initializeMAX31856Pins() {
   }
   Serial.println("  Done");
   Serial.print("Initializing NonSensing pins");
-  for (int i = 0; i < NUM_TCs2; i++) {
+  for (int i = 0; i < NUM_TCs_Sensing; i++) {
     Serial.print(", ");
     Serial.print(CSs2[i]);
     pinMode(CSs2[i], OUTPUT);
@@ -142,7 +199,7 @@ void InitializeChannel(int Pin) {
   for (int i = 0; i < NUM31856REGs; i++) {
     WriteRegister(Pin, i, RegisterValues[i]);
   }
-  //Serial.print("Finished in Initialize Channel\n");
+  Serial.print("Finished in Initialize Channel\n");
 }
 
 void VerifyData(int CS) {
@@ -181,9 +238,9 @@ void setup()
 
   Serial.println("READY!  \n");
   byte SPIERROR = SPSR;//Read SPI status reg to clear errors; doesn't work.
-  delay(100);
-  SPI.setClockDivider(SPI_CLOCK_DIV2);//Reset to 7.8 MHz and Mode 3 for MAX31856
-  //SPI.setClockDivider(SPI_CLOCK_DIV4);
+  delay(1000);
+  //SPI.setClockDivider(SPI_CLOCK_DIV2);//Reset to 7.8 MHz and Mode 3 for MAX31856
+  SPI.setClockDivider(SPI_CLOCK_DIV4);// 4 MHz
   SPI.setDataMode(SPI_MODE3);
   Serial.print("Initalizing Pins\n");
   Serial.print("Initalizing sensing Pins\n");
@@ -191,15 +248,13 @@ void setup()
   for (int i = 0; i < NUM_TCs; i++) { //usually done for each channel..
     InitializeChannel(CSs[i]);
     delay(10);
+    Serial.print("VerifyData");
     VerifyData(CSs[i]);
+    Serial.print("done verifying");
   }
   Serial.print("Initalizing nonsensing Pins\n");
   initializeMAX31856Pins();
-  for (int i = 0; i < NUM_TCs2; i++) { //usually done for each channel..
-    InitializeChannel(CSs2[i]);
-    delay(10);
-    VerifyData(CSs2[i]);
-  }
+
   //noInterrupts();//The EEPROM driver apparently code uses interrupts,
   EEPROM.get( eeAcqRateAddr, Interval);
   Serial.print("Interval = ");
@@ -234,11 +289,14 @@ void loop()
   if (readTemp)
   {
     temp1 = ReadTemperature(CSs[0]);
+    //temp2 = ReadTemperature(CSs[1]);
   if(monitorData)
   {
     Serial.print(ttime);
     Serial.print('\t');
     Serial.print(temp1);
+    //Serial.print('\t');
+    //Serial.print(temp2);
     Serial.print('\n');
 
   }
