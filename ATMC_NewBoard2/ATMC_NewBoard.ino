@@ -6,12 +6,9 @@
 
 ///////// Chip Select Pins //////
 //#define MAX31856_CS1 53// SPI CS for first MAX31856 thermocouple interface 16
-#define MAX31856_CS1 28// SPI CS for second MAX31856 thermocouple interface
-#define MAX31856_CS2 29
-#define MAX31856_CS3 30
-#define NUM_TCs 3 // Number of thermocouples
+#define MAX31856_CS1 16// SPI CS for second MAX31856 thermocouple interface
+#define NUM_TCs 1 // Number of thermocouples
 #define NUM_TCs_Sensing 0 // Number of thermocouples
-#define max1 53
 /*
 #define MAX31856_CS1 53// SPI CS for first MAX31856 thermocouple interface 16
 #define max1 14// SPI CS for second MAX31856 thermocouple interface
@@ -46,7 +43,7 @@
 
 ///////// Globals ////////////.
 // These control the data acquisition rate from 200 ms to 6 s:
-double updateIntervals[] = {100.0, 200.0, 300.0, 1000.0, 500.0, 600.0, 700.0, \
+double updateIntervals[] = {100.0, 200.0, 300.0, 400.0, 500.0, 600.0, 700.0, \
 800.0, 900.0, 1000.0, 4000.0};
 double *updateIntPtr = updateIntervals;
 boolean monitorData = true;
@@ -60,14 +57,13 @@ String RegisterNames[] =  {"CR0", "CR1", "MASK", "CJHF", "CHLF", \
 byte RegisterAddresses[] = {0x00,  0x01,   0x02,   0x03,   0x04,   0x04,     \
 0x06,     0x07,     0x08,     0x09 };
 
-int CSs[] = {MAX31856_CS1,MAX31856_CS2,MAX31856_CS3};
+int CSs[] = {MAX31856_CS1};
 int CSs2[] = {};
 //int CSs2[] = {max1,max2,max3,max4,max5,max6,max7,max8,max9,max10,max11,max12,max13,max14,max15,max16,max17};
 double temp1;
 double temp2;
-double temp3;
 boolean readTemp = false;
-unsigned int Interval = 3;//default Interval
+unsigned int Interval = 9;//default Interval
 boolean printAcqRate = false;
 boolean setAcqRate = false;
 double  acqInterval = 0;
@@ -227,7 +223,7 @@ void VerifyData(int CS) {
 void setup()
 {
   EEPROM.get(eeAcqRateAddr, Interval);// Below we handle invalid cases:
-  if ((Interval <= 0) || (Interval > 9) || isnan(Interval)) Interval = 8; //Set default update index.
+  if ((Interval <= 0) || (Interval > 9) || isnan(Interval)) Interval = 1; //Set default update index.
   // Reading an empty (not yet assigned a value) EEPROM register returns NAN.
 
   Ts = updateIntervals[Interval] / 1000.0; // Set sampling rate.
@@ -243,15 +239,9 @@ void setup()
   Serial.println("READY!  \n");
   byte SPIERROR = SPSR;//Read SPI status reg to clear errors; doesn't work.
   delay(1000);
-  SPI.setClockDivider(SPI_CLOCK_DIV4);//Reset to 7.8 MHz and Mode 3 for MAX31856
-  //SPI.setClockDivider(SPI_CLOCK_DIV128);// 4 MHz #128
+  //SPI.setClockDivider(SPI_CLOCK_DIV2);//Reset to 7.8 MHz and Mode 3 for MAX31856
+  SPI.setClockDivider(SPI_CLOCK_DIV4);// 4 MHz
   SPI.setDataMode(SPI_MODE3);
-
- 
-  Serial.print("Initalizing SD CARD");
-  pinMode(max1, OUTPUT);
-  digitalWrite(max1, HIGH);//Low
-  
   Serial.print("Initalizing Pins\n");
   Serial.print("Initalizing sensing Pins\n");
   initializeMAX31856Pins();
@@ -262,6 +252,8 @@ void setup()
     VerifyData(CSs[i]);
     Serial.print("done verifying");
   }
+  Serial.print("Initalizing nonsensing Pins\n");
+  initializeMAX31856Pins();
 
   //noInterrupts();//The EEPROM driver apparently code uses interrupts,
   EEPROM.get( eeAcqRateAddr, Interval);
@@ -297,17 +289,14 @@ void loop()
   if (readTemp)
   {
     temp1 = ReadTemperature(CSs[0]);
-    temp2 = ReadTemperature(CSs[1]);
-    temp3 = ReadTemperature(CSs[2]);
+    //temp2 = ReadTemperature(CSs[1]);
   if(monitorData)
   {
     Serial.print(ttime);
     Serial.print('\t');
     Serial.print(temp1);
-    Serial.print('\t');
-    Serial.print(temp2);
-    Serial.print('\t');
-    Serial.print(temp3);
+    //Serial.print('\t');
+    //Serial.print(temp2);
     Serial.print('\n');
 
   }
