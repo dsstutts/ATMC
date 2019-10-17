@@ -25,7 +25,7 @@
 #define MAX31856_CS3 30
 #define NUM_TCs 3 // Number of thermocouples
 #define NUM_TCs_Sensing 0 // Number of thermocouples
-#define max1 53
+
 /*
 #define MAX31856_CS1 53// SPI CS for first MAX31856 thermocouple interface 16
 #define max1 14// SPI CS for second MAX31856 thermocouple interface
@@ -63,7 +63,7 @@
 
 ///////// Globals ////////////
 // These control the data acquisition rate from 200 ms to 6 s:
-double updateIntervals[] = {100.0, 200.0, 300.0, 400.0, 500.0, 600.0, 700.0,                                              
+double updateIntervals[] = {100.0, 200.0, 300.0, 1000.0, 500.0, 600.0, 700.0,                                              
 800.0, 900.0, 1000.0, 4000.0};
 double *updateIntPtr = updateIntervals;
 volatile char inbuff[200];
@@ -75,7 +75,7 @@ boolean monitorData = true;
 char dcStr[5];
 char tempStr[10];
 String *dcStrPtr;
-File DataFile;
+
 String FileName = "";
 //char dataString[100];
 String dataString = "";
@@ -106,9 +106,8 @@ boolean record = false;
 boolean saveData = false;
 boolean allOff = false;
 boolean controlErr1 = false;
-boolean powerOn = false;
 boolean ls = false;// List SD card directory flag
-unsigned int Interval = 9;//default Interval
+unsigned int Interval = 3;//default Interval
 boolean printAcqRate = false;
 boolean setAcqRate = false;
 double  acqInterval = 0;
@@ -283,7 +282,8 @@ double ReadTemperature(int Pin) {
 }
 
 void initializeMAX31856Pins() {
-  Serial.print("Initializing SPI chip-select pins");
+  Serial.print("Initializing SPI chip-select pins\n");
+  Serial.print("Initializing Sensing pins\n");
   for (int i = 0; i < NUM_TCs; i++) {
     Serial.print(", ");
     Serial.print(CSs[i]);
@@ -291,7 +291,7 @@ void initializeMAX31856Pins() {
     digitalWrite(CSs[i], HIGH);
   }
   Serial.println("  Done");
-  Serial.print("Initializing NonSensing pins");
+  Serial.print("Initializing NonSensing pins\n");
   for (int i = 0; i < NUM_TCs_Sensing; i++) {
     Serial.print(", ");
     Serial.print(CSs2[i]);
@@ -331,12 +331,12 @@ void VerifyData(int CS) {
 ////////// End of MAX31856 Functions /////////
 void file_err(void)
 {
-
+  Serial.print("err\n"); delay(100);
   int errLength = strlen_P(fileCreateerror);
   for (j = 0; j < errLength; j++)
   {
     myChar = pgm_read_word_near(fileCreateerror + j);
-    Serial.print(myChar);
+    Serial.print(myChar); delay(1000);
   }
   while (1); //Stop here.
 }
@@ -345,6 +345,9 @@ void stopAll()
 {
     noInterrupts();
     SPI.setDataMode(SPI_MODE0);
+    for (int i = 0; i < NUM_TCs; i++) {
+    digitalWrite(CSs[i], HIGH);
+    }
     logfile.close();
     while (allOff); //Stop here now!
 }
@@ -353,7 +356,7 @@ void WriteToSD(void)
 {
   //Write time, temperatures, and current duty cycle to the SD card.
 
-dataString += ttime + comma + temp1 + comma + temp2 + comma + temp3;
+  dataString += ttime + comma + temp1 + comma + temp2 + comma + temp3;
 
   logfile.println(dataString);
   dataString = "";
@@ -393,9 +396,9 @@ void parseSerialInput(void) {
     return;
   }
   if (*inbuffPtr == 'L') { //Just start logging data
+    createFile = true;
     saveData = true;
     readTemp = true;
-    createFile = true;
     numDataPoints = 0;
     ttime = 0.0;
     return;
@@ -406,26 +409,6 @@ void parseSerialInput(void) {
       ls = true;
       return;
     }
-  if (*inbuffPtr == 's') {
-    *inbuffPtr++;//increment pointer to second character
-    if (*inbuffPtr++ == 's') { //Set print settings flag and return.
-      printAcqRate = true;
-      return;
-    }
-    else
-    {
-      *inbuffPtr--;// Decrement pointer
-      setAcqRate = true;
-      while ((*inbuffPtr != '\0')) {
-        if ((*inbuffPtr >= '0') && (*inbuffPtr <= '9')) {
-          dataStr[i] = *inbuffPtr;//Make sure they're numeric!  
-        }
-        *inbuffPtr++;//Increment buffer pointer.
-        i++;
-      }
-      Interval = (unsigned int)atoi(dataStr);//
-    }//End else
-  }// End if s
 
 }// End of parseSerialInput
 
@@ -436,7 +419,7 @@ void setup()
   
 
   EEPROM.get(eeAcqRateAddr, Interval);// Below we handle invalid cases:
-  if ((Interval <= 0) || (Interval > 9) || isnan(Interval)) Interval = 1; //Set default update index.
+  if ((Interval <= 0) || (Interval > 9) || isnan(Interval)) Interval = 8; //Set default update index.
   // Reading an empty (not yet assigned a value) EEPROM register returns NAN.
 
   Ts = updateIntervals[Interval] / 1000.0; // Set sampling rate.
@@ -445,49 +428,37 @@ void setup()
   Timer1.attachInterrupt(ReadData);
   while (!Serial); // for Leonardo/Micro/Zero
   Serial.begin(250000);
-
-  SPI.begin();
-  SPI.setClockDivider(SPI_CLOCK_DIV2);
-  SPI.setDataMode(SPI_MODE0);// SPI Mode 0 for SD card.
-
-  Serial.print("\nInitializing SD card...");
-  if (!card.init(SPI_FULL_SPEED, SDCS)) { //Try full speed first...
-    //if (!card.init(SPI_HALF_SPEED, SDCS)) {
-    Serial.println("initialization failed. Things to check:");
-    Serial.println("* is a card inserted?");
-    Serial.println("* is your wiring correct?");
-    Serial.println("* did you change the SDCS pin to match your shield or module?");
-    return;
-  } else {
-    Serial.println("Wiring is correct and a card is present.");
+  while (!Serial) {
+  ; // wait for serial port to connect. Needed for native USB port only
   }
-
+  pinMode(MAX31856_CS1, OUTPUT);
+  digitalWrite(MAX31856_CS1, HIGH);
+  pinMode(MAX31856_CS2, OUTPUT);
+  digitalWrite(MAX31856_CS2, HIGH);
+  pinMode(MAX31856_CS3, OUTPUT);
+  digitalWrite(MAX31856_CS3, HIGH);
+  Serial.print("Initializing SD card...");
   if (!SD.begin(SDCS))
   {
     Serial.println("SD card failed or not present.  ");
     //while(1);//Might as well stop here...
   }
-  else
+  else{
     Serial.println("SD card initialized.");
-
-  if (!volume.init(card))
-  {
-    Serial.println("Could not find FAT16/FAT32 partition.\
-    \nMake sure you've formatted the card\n");
-    return;
   }
-  SPI.end();
-  byte SPIERROR = SPSR;//Read SPI status reg to clear errors; doesn't work.
-  delay(100);
-  SPI.setClockDivider(SPI_CLOCK_DIV2);//Reset to 7.8 MHz and Mode 3 for MAX31856
-  //SPI.setClockDivider(SPI_CLOCK_DIV4);
+  
+  //SPI.setClockDivider(SPI_CLOCK_DIV2);//Reset to 7.8 MHz and Mode 3 for MAX31856
+  SPI.setClockDivider(SPI_CLOCK_DIV4);
   SPI.setDataMode(SPI_MODE3);
+  
   Serial.print("Initalizing Pins\n");
   initializeMAX31856Pins();
   for (int i = 0; i < NUM_TCs; i++) { //usually done for each channel..
     InitializeChannel(CSs[i]);
     delay(10);
+    Serial.print("VerifyData");
     VerifyData(CSs[i]);
+    Serial.print("done verifying");
   }
   EEPROM.get( eeAcqRateAddr, Interval);
   Serial.print("Interval = ");
@@ -512,17 +483,6 @@ void loop()
       inbuff[i] = '\0';
     }
     inbuffPtr = inbuff;// Point the input string pointer back to the beginning.
-    parseCommands = false;
-
-     if(controlErr1)// Trap invalid control update rate error
-   {
-    int errLen = strlen_P(controlError1);
-    for (j = 0;j < errLen;j++)
-    {
-    myChar = pgm_read_byte_near(controlError1 + j);
-    Serial.print(myChar);
-    }
-   }
   }
 
   if (setAcqRate) {
@@ -568,6 +528,9 @@ void loop()
   if (createFile && saveData)
   {
     SPI.setDataMode(SPI_MODE0);//Switch to SPI_MODE0 for SD access.
+    for (int i = 0; i < NUM_TCs; i++) {
+    digitalWrite(CSs[i], HIGH);
+    }
     // Create a new file
     char filename[] = "LOGGER00.CSV";
     //DateTime now = rtc.now();//This call must occur before noInterrupts()!
@@ -580,23 +543,27 @@ void loop()
       {
         // only open a new file if it doesn't exist
         logfile = SD.open(filename, FILE_WRITE);
+        logfile.print("Lauren");
         logfile.println();
         logfile.print('\n');
         break;  // leave the loop!
       }
-
+    Serial.print("e2\n"); delay(100);
     }
 
     if (!logfile)
     {
       file_err();
     }
+    Serial.print("filing\n");
     createFile = false;
     SPI.setDataMode(SPI_MODE3);//Reset to MAX31856 SPI mode.
+    digitalWrite(SDCS, HIGH);//Low
     interrupts();
   }
   if (readTemp)
   {
+    digitalWrite(SDCS, HIGH);//Low
     temp1 = ReadTemperature(CSs[0]);
     temp2 = ReadTemperature(CSs[1]);
     temp3 = ReadTemperature(CSs[2]);
@@ -617,6 +584,9 @@ void loop()
     if (saveData) {
       noInterrupts();
       SPI.setDataMode(SPI_MODE0);
+      for (int i = 0; i < NUM_TCs; i++) {
+      digitalWrite(CSs[i], HIGH);
+      }
       WriteToSD();
       interrupts();
     }
@@ -627,6 +597,9 @@ void loop()
  {
     noInterrupts();
     SPI.setDataMode(SPI_MODE0);
+    for (int i = 0; i < NUM_TCs; i++) {
+    digitalWrite(CSs[i], HIGH);
+    }
     logfile.close();
     while (allOff); //Stop here now!
   }
