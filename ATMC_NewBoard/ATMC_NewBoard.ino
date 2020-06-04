@@ -11,6 +11,11 @@
 #include <Adafruit_MAX31856.h>
 #include <string.h>
 
+// Uncomment to activate the following items
+//#define ColdJunctionRead // Read cold junction temperatures and save to file
+//#define ColdJunctionSave // Save cold junction temperatures without displaying on monitor
+//#define DataReadyRead // Check to see if there is new data for every thermocouple before reading
+
 #define BS 8 //Backspace character
 #define CR 13// Carrage return
 #define LF 10// Line feed
@@ -43,10 +48,12 @@
 #define TC16 47
 #define TC17 49
 #define TC18 45
-#define NUM_TCs 18 // Number of thermocouples
-int CSs[] = {TC1,TC2,TC3,TC4,TC5,TC6,TC7,TC8,TC9,TC10,TC11,TC12,TC13,TC14,TC15,TC16,TC17,TC18};
+#define NUM_TCs 12 // Number of thermocouples
+
+//////////  Define Thermocouples to read //////////
+int CSs[] = {TC1,TC2,TC3,TC4,TC5,TC6,TC13,TC14,TC15,TC16,TC17,TC18}; //List of thermocouples to read
 #define NUM_TCs_Sensing 18-NUM_TCs // Number of thermocouples
-int CSs_sensing[] = {};
+int CSs_sensing[] = {TC7,TC8,TC9,TC10,TC11,TC12}; //Remaining thermocouples that do not want to be read
 
 double temp[NUM_TCs];
 double temp2[NUM_TCs];
@@ -96,6 +103,7 @@ byte RegisterAddresses[] = {0x00,  0x01,   0x02,   0x03,   0x04,   0x05,     \
 0x06,     0x07,     0x08,     0x09 };
 */
 // Shift register configuration for writing cold junction compensation. Set cold junction temp to zero. Speeds up conversion by 25ms.
+// Temperature is given at temp above ambient (Reduced Temperature)
 //byte RegisterValues[] = {0x90,  0x03,   0xFC,   0x7F,   0xC0,   0x07,     \
 0xFF,     0x80,     0x00,     0x00 };//Type K Thermocouple
 byte RegisterValues[] =   {0x98,  0x07,   0xFC,   0x7F,   0xC0,   0x7F,     \
@@ -319,7 +327,6 @@ double ReadColdJunction(int Pin) {
   // Convert to Celsius
   temperature *= 0.015625;
 
-
   // Return the temperature
   return (temperature);
 }
@@ -451,7 +458,6 @@ void PID_Control(void)
   //Timer3.pwm(HEATER_PIN_C, iDC);//Set DC
 }
 
-
 void WriteToSD(void)
 {
   //Write time, temperatures, and current duty cycle to the SD card.
@@ -461,10 +467,17 @@ void WriteToSD(void)
     dataString += comma + temp[i];
   }
   dataString += comma + iDC;
-  for (i = 0; i < NUM_TCs; i++) // record temperatures
-  {
-  dataString += comma + temp2[i];
-  }
+  #ifdef ColdJunctionRead
+    for (i = 0; i < NUM_TCs; i++) // record temperatures
+    {
+    dataString += comma + temp2[i];
+    }  
+  #elif ColdJunctionSave
+    for (i = 0; i < NUM_TCs; i++) // record temperatures
+    {
+    dataString += comma + temp2[i];
+    }
+  #endif
   logfile.println(dataString);
   dataString = "";
 }
@@ -494,7 +507,7 @@ bool getValueWithDataReady(int (DRArray)[18], int DRnum){
 }
 void defineDRArray(int (&DRArray)[18], int &DRnum){
   int N=1000; //N is dummy variable
-  
+  //SPI chip selects for data ready pins
   DRArray[0]=17;
   DRArray[1]=15;
   DRArray[2]=6;
@@ -750,9 +763,9 @@ void parseSerialInput(void) {
 void setup()
 {
   Timer3.initialize(40); // 40 us => 25 kHz PWM frequency  
-  Timer3.pwm(HEATER_PIN_A, 0);
+  Timer3.pwm(HEATER_PIN_A, 0); //Initialize heaters to 0
   Timer3.pwm(HEATER_PIN_B, 0);
-  
+  //Timer3.pwm(HEATER_PIN_C, 0);
   //Timer3.pwm(HEATER_PIN_C, 0);
   EEPROM.get(eeAcqRateAddr, Interval);// Below we handle invalid cases:
   if ((Interval <= 0) || (Interval > 9) || isnan(Interval)) Interval = 8; //Set default update index.
@@ -947,7 +960,6 @@ void loop()
       {
         // only open a new file if it doesn't exist
         logfile = SD.open(filename, FILE_WRITE);
-        logfile.print("Lauren");
         logfile.println();
         logfile.print('\n');
         break;  // leave the loop!
@@ -985,24 +997,30 @@ void loop()
     for (i = 0; i < NUM_TCs; i++) // Read Temperatures
     {
     temp[i] = ReadTemperature(CSs[i]);
-    temp2[i]=ReadColdJunction(CSs[i]);
+    #ifdef ColdJunctionRead
+      temp2[i]=ReadColdJunction(CSs[i]); // Read cold junction temperatures
+    #elif ColdJunctionSave
+      temp2[i]=ReadColdJunction(CSs[i]); // Read cold junction temperatures
+    #endif
     }
   if(monitorData)  
   {   
-    // Uncomment to enable dataready for all thermocouples being read.
-    /*         
-    bool DataReady=false;
-    DataReady=getValueWithDataReady(DRArray, DRnum); 
-    Serial.print(DataReady);
-    Serial.print("\n");
-    */                                                                                                            
+    // enables dataready for all thermocouples being read.
+    #ifdef DataReadyRead         
+      bool DataReady=false;
+      DataReady=getValueWithDataReady(DRArray, DRnum); 
+      Serial.print(DataReady);
+      Serial.print("\n");
+    #endif                                                                                                           
     Serial.print(ttime);
         for (i = 0; i < NUM_TCs; i++) // post temperatures
     {
     Serial.print('\t');
     Serial.print(temp[i]);
-    //Serial.print('\t');
-    //Serial.print(temp2[i]);
+    #ifdef ColdJunctionRead
+      Serial.print('\t');
+      Serial.print(temp2[i]); // Print out cold temperature readings 
+    #endif
     }
     Serial.print('\t'); 
     Serial.print(iDC);//Current duty cycle
@@ -1037,6 +1055,5 @@ void loop()
     while (allOff); //Stop here now!
   }
 }
-
 
 ////////////  End Main Loop /////////////////
