@@ -1,5 +1,5 @@
 /*
-  Sets and controls a temperature and acquires and logs temperatures 
+  Sets and controls a temperature and acquires and logs temperatures
   using MAX31856 thermocouple interface chips.
 
   Temperature Control:
@@ -20,14 +20,14 @@
   #define HBRIDGE
   and deselected by commenting out the directive
   //#define HBRIDGE
-  Similarly, the same code can be used for the first prototype 
+  Similarly, the same code can be used for the first prototype
   having only two thermocouples by uncommenting:
   //#define TWOTC
-  and any functions you'd like to used during development can be 
+  and any functions you'd like to used during development can be
   compiled in by uncommenting
   //#define DEVMODE
   If setting the speed of a computer fan, uncomment:
-  //#define FANSPEED 
+  //#define FANSPEED
   and control the fan speed by setting the dutycycle of
   the Phase C PWM output.
   Temperature acquisition LED on Pin 11
@@ -74,7 +74,7 @@
 
   @Misc{ATMC2017 ,
   author =   {Stutts, Daniel S.},
-  title = {{TempDAQandControl.ino: Arduino Application to 
+  title = {{TempDAQandControl.ino: Arduino Application to
   Acquire and Control Temperatures }},
   howpublished = {\url{https://github.com/dsstutts/ATMC.git}},
   year = {2017}}
@@ -103,9 +103,9 @@
 // Conditional precompiler directive for development mode:
 //#define DEVMODE
 // Conditional precompiler directive for 2 thermocouple case (1st development prototype)
-#define TWOTC 
+#define TWOTC
 // Conditional precompiler directive for controlling H-Bridge output:
-//#define HBRIDGE 
+//#define HBRIDGE
 //#define THREEPHASE
 #define FANSPEED
 #define SINGLEPHASE
@@ -115,7 +115,7 @@
 #define DEL 127//Delete character
 #define ECHO_//Comment out if you don't want to echo input chars to the serial monitor
 #define MAXPOINTS 2000 // Maximum number of data points to store in a file
-#define MAXFILES 10000 // Maximum number of data files to create
+#define MAXFILES 99 // Maximum number of data files to create
 #define HEATER_PIN 3 // PWM output pin
 #ifdef HBRIDGE
 #define PWM_PIN_A 3
@@ -153,9 +153,9 @@
 #define NUM31856REGs 10// Number of special function registers on the MAX31856
 #define TYPE_K 0x03
 #define TYPE_T 0x07
-#define NOP __asm__ __volatile__ ("nop");// Inline no-operation ASM 
+#define NOP __asm__ __volatile__ ("nop");// Inline no-operation ASM
 #define DATAREAD_LED 11//     for inserting a 62.5 ns delay used  for MAX31856
-//                            SPI communication and for H-bridge deadtime. 
+//                            SPI communication and for H-bridge deadtime.
 //The following executes 10 NOPs in a row for a 625 ns delay:
 #define NOP10 __asm__ __volatile__ ("nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t"\
 "nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t");
@@ -298,7 +298,7 @@ boolean Help = false;
 
 const char fileCreateerror[] PROGMEM = "Couldn't create file\n";//Store in program memory
 const char controlError1[] PROGMEM = "Invalid control Interval\n";
-const char HelpText[] PROGMEM = {"THC supports the following commands:\r\n \\
+const char HelpText[] PROGMEM = {"I support the following commands:\r\n \\
   A -- Control, acquire and store data\r\n \\
   a -- Stop everything and save data; wait until restart.\r\n \\
   C# -- Run in open loop with dutycycle #.\r\n \\
@@ -421,7 +421,7 @@ unsigned long ReadMultipleRegisters(int Pin, byte StartRegister, int count) {
   NOP;
 
   for (int i = 0; i < count; i++) {
-    data = (data << 8) | SPI.transfer(0); //bitshift left 8 bits, 
+    data = (data << 8) | SPI.transfer(0); //bitshift left 8 bits,
   }//                                     then add the next register
   digitalWrite(Pin, HIGH);
   return data;
@@ -770,7 +770,7 @@ void parseSerialInput(void) {
 // Set target temperature only:
   if (*inbuffPtr == 'q') { //settemp
     while (*inbuffPtr != '\0') {
-      if (((*inbuffPtr >= '0') && (*inbuffPtr <= '9')) || (*inbuffPtr == '.')) { // Make 
+      if (((*inbuffPtr >= '0') && (*inbuffPtr <= '9')) || (*inbuffPtr == '.')) { // Make
         tempStr[i] = *inbuffPtr;//                  sure they're numeric!
         i++;
       }//End if numeric
@@ -792,7 +792,7 @@ void parseSerialInput(void) {
     numDataPoints = 0;
     ttime = 0.0;
     while (*inbuffPtr != '\0') {
-      if (((*inbuffPtr >= '0') && (*inbuffPtr <= '9')) || (*inbuffPtr == '.')) { // Make 
+      if (((*inbuffPtr >= '0') && (*inbuffPtr <= '9')) || (*inbuffPtr == '.')) { // Make
         tempStr[i] = *inbuffPtr;//                  sure they're numeric!
         i++;
       }//End if numeric
@@ -815,8 +815,8 @@ void parseSerialInput(void) {
     openLoop = true;
     setDC = true;
     while (*inbuffPtr != '\0') {
-      if (((*inbuffPtr >= '0') && (*inbuffPtr <= '9')) || (*inbuffPtr == '.')) { 
-        dcStr[i] = *inbuffPtr;// Make sure they're numeric!        
+      if (((*inbuffPtr >= '0') && (*inbuffPtr <= '9')) || (*inbuffPtr == '.')) {
+        dcStr[i] = *inbuffPtr;// Make sure they're numeric!
         i++;
       }//End if numeric
       *inbuffPtr++;
@@ -835,8 +835,8 @@ void parseSerialInput(void) {
     ttime = 0.0;
     *inbuffPtr++;
     while (*inbuffPtr != '\0') {
-      if (((*inbuffPtr >= '0') && (*inbuffPtr <= '9')) || (*inbuffPtr == '.')) {  
-        dcStr[i] = *inbuffPtr;// Make sure they're numeric!  
+      if (((*inbuffPtr >= '0') && (*inbuffPtr <= '9')) || (*inbuffPtr == '.')) {
+        dcStr[i] = *inbuffPtr;// Make sure they're numeric!
         i++;
       }//End if numeric
       *inbuffPtr++;
@@ -844,7 +844,7 @@ void parseSerialInput(void) {
     return;
   } // End of if W
 
-  if (*inbuffPtr == 'c') { 
+  if (*inbuffPtr == 'c') {
     saveData = false;
     allOff = true;
     return;
@@ -877,7 +877,7 @@ void parseSerialInput(void) {
       setAcqRate = true;
       while ((*inbuffPtr != '\0')) {
         if ((*inbuffPtr >= '0') && (*inbuffPtr <= '9')) {
-          dataStr[i] = *inbuffPtr;//Make sure they're numeric!  
+          dataStr[i] = *inbuffPtr;//Make sure they're numeric!
         }
         *inbuffPtr++;//Increment buffer pointer.
         i++;
@@ -888,10 +888,10 @@ void parseSerialInput(void) {
   }// End if s
 if (*inbuffPtr == 'f')
 {
-   while ((*inbuffPtr != '\0')) 
+   while ((*inbuffPtr != '\0'))
    {
         if ((*inbuffPtr >= '0') && (*inbuffPtr <= '9')) {
-          dataStr[i] = *inbuffPtr;//Make sure they're numeric!  
+          dataStr[i] = *inbuffPtr;//Make sure they're numeric!
         }
         *inbuffPtr++;//Increment buffer pointer.
         i++;
@@ -899,7 +899,7 @@ if (*inbuffPtr == 'f')
       fanDC = (unsigned int)atoi(dataStr);//
       setFanSpeed = true;
    return;
-   
+
 }
   // Time functions:
   if (*inbuffPtr == 't') { //Time functions
@@ -1080,7 +1080,7 @@ if (*inbuffPtr == 'f')
             kdSet = true;
             break;
           default:
-            if (((*inbuffPtr >= '0') && (*inbuffPtr <= '9')) || (*inbuffPtr == '.')) { 
+            if (((*inbuffPtr >= '0') && (*inbuffPtr <= '9')) || (*inbuffPtr == '.')) {
               if (kdSet) {// Make sure they're numeric!
                 kdStr[k] = *inbuffPtr;
                 kpSet = false;
@@ -1219,7 +1219,7 @@ void setup()
   Serial.print("\n");
   //Ts = updateIntervals[Interval] / 1000.0; // Set default sampling rate.
   //Timer1.initialize(200000);// 200 ms
-  Timer1.initialize(((long)updateIntervals[Interval]) * 1000); // Set  
+  Timer1.initialize(((long)updateIntervals[Interval]) * 1000); // Set
   Timer1.attachInterrupt(ReadData);                           // update interval.
 
 #ifdef HBRIDGE
@@ -1335,7 +1335,7 @@ void loop()
     char filename[] = "LOGGER00.CSV";
     DateTime now = rtc.now();//This call must occur before noInterrupts()!
     noInterrupts();
-    for (i = 0; i < MAXFILES; i++) {
+    for (i = 0; i <= MAXFILES; i++) {
       filename[6] = i / 10 + '0';
       filename[7] = i % 10 + '0';
 
@@ -1437,7 +1437,7 @@ void loop()
     // in the pidHBcontrol() function.
     if (iDC < 0)
     { // Cooling case
-      Timer3.pwm(PWM_PIN_A, 0);// The number of NOPs will have 
+      Timer3.pwm(PWM_PIN_A, 0);// The number of NOPs will have
                                // to be experimentally verified!
       NOP10 // Make sure phase A is completely off!
       NOP10
@@ -1479,7 +1479,7 @@ void loop()
     temp5 = ReadTemperature(CSs[4]);
     temp6 = ReadTemperature(CSs[5]);
 #endif
-if (temp1 >= 120) 
+if (temp1 >= 120)
 { // Shut down if control temp > 120 degrees C.
 #ifdef HBRIDGE
 Timer3.pwm(PWM_PIN_A, 0);//Turn both phases off!

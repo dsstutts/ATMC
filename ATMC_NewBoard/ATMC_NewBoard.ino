@@ -22,7 +22,7 @@
 #define DEL 127//Delete character
 #define ECHO_//Comment out if you don't want to echo input chars to the serial monitor
 #define MAXPOINTS 2000 // Maximum number of data points to store in a file
-#define MAXFILES 10000 // Maximum number of data files to create
+#define MAXFILES 99 // Maximum number of data files to create
 
 ///////// Chip Select Pins //////
 #define SDCS 53// SPI CS for SD card
@@ -60,9 +60,9 @@ double temp2[NUM_TCs];
 #define NUM31856REGs 10// Number of special function registers on the MAX31856
 #define TYPE_K 0x03
 #define TYPE_T 0x07
-#define NOP __asm__ __volatile__ ("nop");// Inline no-operation ASM 
+#define NOP __asm__ __volatile__ ("nop");// Inline no-operation ASM
 #define DATAREAD_LED 11//     for inserting a 62.5 ns delay used  for MAX31856
-//                            SPI communication and for H-bridge deadtime. 
+//                            SPI communication and for H-bridge deadtime.
 //The following executes 10 NOPs in a row for a 625 ns delay:
 #define NOP10 __asm__ __volatile__ ("nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t"\
 "nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t");
@@ -71,7 +71,7 @@ int DRArray[18], DRnum=0;     //DataReady
 
 ///////// Globals ////////////
 // These control the data acquisition rate from 200 ms to 6 s:
-double updateIntervals[] = {100.0, 200.0, 300.0, 400.0, 500.0, 600.0, 700.0,                                              
+double updateIntervals[] = {100.0, 200.0, 300.0, 400.0, 500.0, 600.0, 700.0,
 800.0, 200.0, 1000.0, 4000.0};
 double *updateIntPtr = updateIntervals;
 volatile char inbuff[200];
@@ -158,7 +158,6 @@ double Kd = 60.0;
 boolean KdSet = false;
 boolean pidUpdate = false;
 
-boolean PowerOn = false;
 boolean setDC = false;//Manual open loop duty cycle setting flag.
 boolean controlOn = false;//PID control flag.
 volatile char InChar = '\0'; // serial input character
@@ -167,7 +166,7 @@ boolean Help = false;
 
 const char fileCreateerror[] PROGMEM = "Couldn't create file\n";//Store in program memory
 const char controlError1[] PROGMEM = "Invalid control Interval\n";
-const char HelpText[] PROGMEM = {"THC supports the following commands:\r\n \\
+const char HelpText[] PROGMEM = {"I support the following commands:\r\n \\
   A -- Control, acquire and store data\r\n \\
   a -- Stop everything and save data; wait until restart.\r\n \\
   h -- List of supported commands\r\n \\
@@ -230,7 +229,7 @@ SdVolume volume;
 SdFile root;
 File logfile;
 ////////////// End of Object Instantiations //////////
-void getValueWithDataReady(int pin1, int dr1, int pin2=666, int dr2=666, int pin3=666, int dr3=666, int pin4=666, int dr4=666);   
+void getValueWithDataReady(int pin1, int dr1, int pin2=666, int dr2=666, int pin3=666, int dr3=666, int pin4=666, int dr4=666);
 ///////// Interrupt Service Routines (ISRs) ///////////////
 void serialEvent()
 {
@@ -281,7 +280,7 @@ unsigned long ReadMultipleRegisters(int Pin, byte StartRegister, int count) {
   NOP;
 
   for (int i = 0; i < count; i++) {
-    data = (data << 8) | SPI.transfer(0); //bitshift left 8 bits, 
+    data = (data << 8) | SPI.transfer(0); //bitshift left 8 bits,
   }//                                     then add the next register
   digitalWrite(Pin, HIGH);
   return data;
@@ -471,7 +470,7 @@ void WriteToSD(void)
     for (i = 0; i < NUM_TCs; i++) // record temperatures
     {
     dataString += comma + temp2[i];
-    }  
+    }
   #elif ColdJunctionSave
     for (i = 0; i < NUM_TCs; i++) // record temperatures
     {
@@ -484,7 +483,7 @@ void WriteToSD(void)
 bool getValueWithDataReady(int (DRArray)[18], int DRnum){
   int allTrue=0, checkTemp=0;
   bool check[18]={0};
-  const byte REGISTER=0x0C; 
+  const byte REGISTER=0x0C;
   while(allTrue!=DRnum)
   {
     for(int n=0; n<DRnum; n++)
@@ -496,8 +495,8 @@ bool getValueWithDataReady(int (DRArray)[18], int DRnum){
         {
           allTrue++;
           check[n]=true;
-          //Serial.print(n); 
-          //Serial.print('\n'); 
+          //Serial.print(n);
+          //Serial.print('\n');
         }
 
       }
@@ -528,7 +527,7 @@ void defineDRArray(int (&DRArray)[18], int &DRnum){
   DRArray[17]=44;
   for (int n=0; n!=18; n++)
   {
-    if (DRArray[n]!= N) DRnum++; 
+    if (DRArray[n]!= N) DRnum++;
   }
   return;
 }
@@ -596,7 +595,7 @@ void parseSerialInput(void) {
       setAcqRate = true;
       while ((*inbuffPtr != '\0')) {
         if ((*inbuffPtr >= '0') && (*inbuffPtr <= '9')) {
-          dataStr[i] = *inbuffPtr;//Make sure they're numeric!  
+          dataStr[i] = *inbuffPtr;//Make sure they're numeric!
         }
         *inbuffPtr++;//Increment buffer pointer.
         i++;
@@ -607,7 +606,7 @@ void parseSerialInput(void) {
   }// End if s
   if (*inbuffPtr == 'q') { //settemp
     while (*inbuffPtr != '\0') {
-      if (((*inbuffPtr >= '0') && (*inbuffPtr <= '9')) || (*inbuffPtr == '.')) { // Make 
+      if (((*inbuffPtr >= '0') && (*inbuffPtr <= '9')) || (*inbuffPtr == '.')) { // Make
         tempStr[i] = *inbuffPtr;//                  sure they're numeric!
         i++;
       }//End if numeric
@@ -629,7 +628,7 @@ void parseSerialInput(void) {
     numDataPoints = 0;
     ttime = 0.0;
     while (*inbuffPtr != '\0') {
-      if (((*inbuffPtr >= '0') && (*inbuffPtr <= '9')) || (*inbuffPtr == '.')) { // Make 
+      if (((*inbuffPtr >= '0') && (*inbuffPtr <= '9')) || (*inbuffPtr == '.')) { // Make
         tempStr[i] = *inbuffPtr;//                  sure they're numeric!
         i++;
       }//End if numeric
@@ -652,8 +651,8 @@ void parseSerialInput(void) {
     openLoop = true;
     setDC = true;
     while (*inbuffPtr != '\0') {
-      if (((*inbuffPtr >= '0') && (*inbuffPtr <= '9')) || (*inbuffPtr == '.')) { 
-        dcStr[i] = *inbuffPtr;// Make sure they're numeric!        
+      if (((*inbuffPtr >= '0') && (*inbuffPtr <= '9')) || (*inbuffPtr == '.')) {
+        dcStr[i] = *inbuffPtr;// Make sure they're numeric!
         i++;
       }//End if numeric
       *inbuffPtr++;
@@ -672,8 +671,8 @@ void parseSerialInput(void) {
     ttime = 0.0;
     *inbuffPtr++;
     while (*inbuffPtr != '\0') {
-      if (((*inbuffPtr >= '0') && (*inbuffPtr <= '9')) || (*inbuffPtr == '.')) {  
-        dcStr[i] = *inbuffPtr;// Make sure they're numeric!  
+      if (((*inbuffPtr >= '0') && (*inbuffPtr <= '9')) || (*inbuffPtr == '.')) {
+        dcStr[i] = *inbuffPtr;// Make sure they're numeric!
         i++;
       }//End if numeric
       *inbuffPtr++;
@@ -681,7 +680,7 @@ void parseSerialInput(void) {
     return;
   } // End of if W
 
-  if (*inbuffPtr == 'c') { 
+  if (*inbuffPtr == 'c') {
     saveData = false;
     allOff = true;
     return;
@@ -728,7 +727,7 @@ void parseSerialInput(void) {
             kdSet = true;
             break;
           default:
-            if (((*inbuffPtr >= '0') && (*inbuffPtr <= '9')) || (*inbuffPtr == '.')) { 
+            if (((*inbuffPtr >= '0') && (*inbuffPtr <= '9')) || (*inbuffPtr == '.')) {
               if (kdSet) {// Make sure they're numeric!
                 kdStr[k] = *inbuffPtr;
                 kpSet = false;
@@ -762,7 +761,7 @@ void parseSerialInput(void) {
 
 void setup()
 {
-  Timer3.initialize(40); // 40 us => 25 kHz PWM frequency  
+  Timer3.initialize(40); // 40 us => 25 kHz PWM frequency
   Timer3.pwm(HEATER_PIN_A, 0); //Initialize heaters to 0
   Timer3.pwm(HEATER_PIN_B, 0);
   //Timer3.pwm(HEATER_PIN_C, 0);
@@ -813,11 +812,11 @@ void setup()
     return;
   }
   SPI.end();
-  
+
   //SPI.setClockDivider(SPI_CLOCK_DIV2);//Reset to 7.8 MHz and Mode 3 for MAX31856
   SPI.setClockDivider(SPI_CLOCK_DIV128);
   SPI.setDataMode(SPI_MODE3);
-  
+
   Serial.print("Initalizing Pins\n");
   initializeMAX31856Pins();
   for (int i = 0; i < NUM_TCs; i++) { //usually done for each channel..
@@ -847,7 +846,7 @@ void setup()
   Serial.print("Interval = ");
   Serial.print(Interval);
   Serial.print("\n");
-  Timer1.initialize(((long)updateIntervals[Interval]) * 1000); // Set  
+  Timer1.initialize(((long)updateIntervals[Interval]) * 1000); // Set
   Timer1.attachInterrupt(ReadData);                           // update interval.
 
   delay(120);
@@ -855,7 +854,7 @@ void setup()
 ///////////// End setup ////////////
 ///////////// Main Loop ////////////
 void loop()
-{    
+{
   // All other function calls should occur here...
   if (parseCommands)
   {
@@ -952,7 +951,7 @@ void loop()
     char filename[] = "LOGGER00.CSV";
     //DateTime now = rtc.now();//This call must occur before noInterrupts()!
     noInterrupts();
-    for (i = 0; i < MAXFILES; i++) {
+    for (i = 0; i <= MAXFILES; i++) {
       filename[6] = i / 10 + '0';
       filename[7] = i % 10 + '0';
 
@@ -990,7 +989,7 @@ void loop()
       dcStr[i] = '\0';
     }
   }
-  
+
   if (readTemp)
   {
     digitalWrite(SDCS, HIGH);//Low
@@ -1003,15 +1002,15 @@ void loop()
       temp2[i]=ReadColdJunction(CSs[i]); // Read cold junction temperatures
     #endif
     }
-  if(monitorData)  
-  {   
+  if(monitorData)
+  {
     // enables dataready for all thermocouples being read.
-    #ifdef DataReadyRead         
+    #ifdef DataReadyRead
       bool DataReady=false;
-      DataReady=getValueWithDataReady(DRArray, DRnum); 
+      DataReady=getValueWithDataReady(DRArray, DRnum);
       Serial.print(DataReady);
       Serial.print("\n");
-    #endif                                                                                                           
+    #endif
     Serial.print(ttime);
         for (i = 0; i < NUM_TCs; i++) // post temperatures
     {
@@ -1019,10 +1018,10 @@ void loop()
     Serial.print(temp[i]);
     #ifdef ColdJunctionRead
       Serial.print('\t');
-      Serial.print(temp2[i]); // Print out cold temperature readings 
+      Serial.print(temp2[i]); // Print out cold temperature readings
     #endif
     }
-    Serial.print('\t'); 
+    Serial.print('\t');
     Serial.print(iDC);//Current duty cycle
     Serial.print('\n');
   }
