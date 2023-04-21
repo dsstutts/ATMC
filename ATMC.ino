@@ -120,9 +120,11 @@
 #ifdef HBRIDGE
 #define PWM_PIN_A 3
 #define PWM_PIN_B 2
-#elifdef SINGLEPHASE
+#endif
+#ifdef SINGLEPHASE
 #define HEATER_PIN 3 // PWM output pin
-#elifdef THREEPHASE
+#endif
+#ifdef THREEPHASE
 #define PWM_PIN_A 3
 #define PWM_PIN_B 2
 #define PWM_PIN_C 5
@@ -298,42 +300,41 @@ boolean Help = false;
 
 const char fileCreateerror[] PROGMEM = "Couldn't create file\n";//Store in program memory
 const char controlError1[] PROGMEM = "Invalid control Interval\n";
-const char HelpText[] PROGMEM = {"I support the following commands:\r\n \\
-  A -- Control, acquire and store data\r\n \\
-  a -- Stop everything and save data; wait until restart.\r\n \\
-  C# -- Run in open loop with dutycycle #.\r\n \\
-  f# -- Set fan speed dutycycle with dutycycle # on phase C.\r\n \\
-  h -- List of supported commands\r\n \\
-  L -- Log data; use 'a' to stop and save.\r\n \\
-  o -- Turn power off\r\n \\
-  ss -- Print acquisition rate\r\n \\
-  s# -- Set data acquisition interval where # is an integer option denoting:\r\n \\
-    0 --> .1 sec (not implemented) \r\n \\
-    1 --> .2 sec\r\n \\
-    2 --> .3 sec\r\n \\
-    3 --> .4 sec\r\n \\
-    4 --> .5 sec\r\n \\
-    5 --> .6 sec\r\n \\
-    6 --> .7 sec\r\n \\
-    7 --> .8 sec\r\n \\
-    8 --> .9 sec\r\n \\
-    9 --> 1.0 sec\r\n \\
-    10 --> 4 sec\r\n \\
-  T# -- Set the x = 0 boundary temperature to # degrees C, turn power on, and log data\r\n \\
-  q# -- Set the boundary temperature to # degrees C\r\n \\
-  th#m#s# -- set time where h,m, and s are hours, minutes, seconds and #, integers \r\n \\
-  ty## -- set year where ## are the last two digits \r\n \\
-  tr## -- set month where ## are the digits of the month \r\n \\
-  td## -- set day \r\n \\
-  tt -- Show the current time.\r\n\ \\
-  gg -- Report current PID gains.\r\n \\
-     gp#i#d# -- Set PID gains, where # denotes floating point numbers.\r\n \\
+const char HelpText[] PROGMEM = {"I support the following commands:\r\n \
+  A -- Control, acquire and store data\r\n \
+  a -- Stop everything and save data; wait until restart.\r\n \
+  C# -- Run in open loop with dutycycle #.\r\n \
+  f# -- Set fan speed dutycycle with dutycycle # on phase C.\r\n \
+  h -- List of supported commands\r\n \
+  L -- Log data; use 'a' to stop and save.\r\n \
+  o -- Turn power off\r\n \
+  ss -- Print acquisition rate\r\n \
+  s# -- Set data acquisition interval where # is an integer option denoting:\r\n \
+    0 --> .1 sec (not implemented) \r\n \
+    1 --> .2 sec\r\n \
+    2 --> .3 sec\r\n \
+    3 --> .4 sec\r\n \
+    4 --> .5 sec\r\n \
+    5 --> .6 sec\r\n \
+    6 --> .7 sec\r\n \
+    7 --> .8 sec\r\n \
+    8 --> .9 sec\r\n \
+    9 --> 1.0 sec\r\n \
+    10 --> 4 sec\r\n \
+  T# -- Set the x = 0 boundary temperature to # degrees C, turn power on, and log data\r\n \
+  q# -- Set the boundary temperature to # degrees C\r\n \
+  th#m#s# -- set time where h,m, and s are hours, minutes, seconds and #, integers \r\n \
+  ty## -- set year where ## are the last two digits \r\n \
+  tr## -- set month where ## are the digits of the month \r\n \
+  td## -- set day \r\n \
+  tt -- Show the current time.\r\n\ \
+  gg -- Report current PID gains.\r\n \
+     gp#i#d# -- Set PID gains, where # denotes floating point numbers.\r\n \
      Note that while you may set one or two at a time, you must enter the PID \
-     gains and times in order!\r\n \\
-z -- Monitor data by printing to the serial monitor -- toggle logic.\r\n\ \\
+     gains and times in order!\r\n \
+z -- Monitor data by printing to the serial monitor -- toggle logic.\r\n\ \
 W#### -- Simultaneously set duty cycle and log data, where #### represents the \
-duty cycle from 0 to 1023.\r\n"
-};
+duty cycle from 0 to 1023.\r\n"};
 //12 byte PID gains structure:
 struct PID_Gains {
   double Kp;
@@ -1454,7 +1455,8 @@ void loop()
       NOP10
       Timer3.pwm(PWM_PIN_A, iDC);
     }
-#elif SINGLEPHASE
+#endif
+#ifdef SINGLEPHASE
     if (iDC < 0)iDC = 0;// Saturate duty cycles below zero or above 1023.
     if (iDC > 1023) iDC = 1023;
     Timer3.pwm(HEATER_PIN, iDC);
@@ -1484,9 +1486,11 @@ if (temp1 >= 120)
 #ifdef HBRIDGE
 Timer3.pwm(PWM_PIN_A, 0);//Turn both phases off!
 Timer3.pwm(PWM_PIN_B, 0);
-#elif SINGLEPHASE
+#endif
+#ifdef SINGLEPHASE
 Timer3.pwm(HEATER_PIN, 0);//Set DC to zero!
-#elif THREEPHASE
+#endif
+#ifdef THREEPHASE
 Timer3.pwm(HEATER_PIN, 0);//Set DC to zero!
 Timer3.pwm(PWM_PIN_A, 0);//Turn all 3 phases off!
 Timer3.pwm(PWM_PIN_B, 0);
@@ -1570,9 +1574,11 @@ if(setFanSpeed)
 #ifdef HBRIDGE
 Timer3.pwm(PWM_PIN_A, 0);//Turn both phases off!
 Timer3.pwm(PWM_PIN_B, 0);
-#elif SINGLEPHASE
+#endif
+#ifdef SINGLEPHASE
 Timer3.pwm(HEATER_PIN, 0);//Set DC to zero!
-#elif THREEPHASE
+#endif
+#ifdef THREEPHASE
 Timer3.pwm(PWM_PIN_A, 0);//Turn all 3 phases off!
 Timer3.pwm(PWM_PIN_B, 0);
 Timer3.pwm(PWM_PIN_C, 0);
