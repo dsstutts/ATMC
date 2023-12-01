@@ -41,7 +41,11 @@ double temp[NUM_TCs];
 ////////////////////////////////
 
 ////////// Globals //////////
+// Set Active Single Phase PWM Output Pin:
+unsigned int ACTIVE_PWM = HEATER_PIN_A;
+
 // These control the data acquisition rate from 100 ms to 4 s:
+unsigned int ACTIVE_PWM = HEATER_PIN_A;
 double updateIntervals[] = {100.0, 200.0, 300.0, 400.0, 500.0, 600.0, 700.0,                                              
 800.0, 900.0, 1000.0, 4000.0};
 volatile char inbuff[200];
@@ -241,12 +245,12 @@ void file_err(void) {
 		myChar = pgm_read_word_near(fileCreateerror + j);
 		Serial.print(myChar); delay(1000);
 	}
-	Timer3.setPwmDuty(HEATER_PIN_A, 0);//Set DC to zero!
+	Timer3.pwm(HEATER_PIN_A, 0);//Set DC to zero!
 	while (1); //Stop here.
 }
 
 void stopAll() {
-	Timer3.setPwmDuty(HEATER_PIN_A, 0);//Set DC to zero!
+	Timer3.pwm(ACTIVE_PWM, 0);//Set DC to zero!
     noInterrupts();
     SPI.setDataMode(SPI_MODE0);
     for (int i = 0; i < NUM_TCs; i++) {
@@ -339,9 +343,9 @@ void parseSerialInput(void) {
 
 void setup() {
 	Timer3.initialize(40); // 40 us => 25 kHz PWM frequency  
-	Timer3.setPwmDuty(HEATER_PIN_A, 0);// Initialize heaters to 0
-	Timer3.setPwmDuty(HEATER_PIN_B, 0);
-	Timer3.setPwmDuty(HEATER_PIN_C, 0);
+	Timer3.pwm(HEATER_PIN_A, 0);// Initialize heaters to 0
+  Timer3.pwm(HEATER_PIN_B, 0);
+	Timer3.pwm(HEATER_PIN_C, 0);
 	EEPROM.get(eeAcqRateAddr, Interval);// Below we handle invalid cases:
 	if ((Interval <= 0) || (Interval > 9) || isnan(Interval)) Interval = 8;// Set default update index.
 	// Reading an empty (not yet assigned a value) EEPROM register returns NAN.
@@ -393,12 +397,15 @@ void setup() {
 		Serial.print("Done Verifying\n");
 	}
 	EEPROM.get( eeAcqRateAddr, Interval);
-	Serial.print("Interval = ");
+	Serial.print("Interval = \n");
 	Serial.print(Interval);
 	Serial.print("\n");
 	Timer1.initialize(((long)updateIntervals[Interval]) * 1000); // Set update interval.
 	Timer1.attachInterrupt(ReadData);
-	delay(120);
+	delay(120); 
+  Serial.print("Active PWM Pin: ");
+  Serial.print(ACTIVE_PWM);
+  Serial.print("\n");
 }
 ////////// End setup //////////
 ////////// Main Loop //////////
@@ -477,8 +484,9 @@ void loop() { // All other function calls occur here.
 		iDC = atoi(dcStr);
 		if (iDC < 0)iDC = 0;// Saturate duty cycles below zero or above 1023.
 		if (iDC > 1023) iDC = 1023;
-		Timer3.setPwmDuty(HEATER_PIN_A, iDC);//Set DC
+		Timer3.pwm(ACTIVE_PWM, iDC);//Set DC
     Serial.print(iDC);
+    Serial.print("\n");
 		setDC = false;
 		for (i = 0; i < sizeof(dcStr); i++) { // Flush dcStr buffer.
 			dcStr[i] = '\0';
@@ -514,7 +522,7 @@ void loop() { // All other function calls occur here.
 		ttime = ttime + Ts;
 	}
 	if (allOff) {
-		Timer3.setPwmDuty(HEATER_PIN_A, 0);// Set DC to zero!
+		Timer3.pwm(ACTIVE_PWM, 0);// Set DC to zero!
 		noInterrupts();
 		SPI.setDataMode(SPI_MODE0);
 		for (int i = 0; i < NUM_TCs; i++) {
