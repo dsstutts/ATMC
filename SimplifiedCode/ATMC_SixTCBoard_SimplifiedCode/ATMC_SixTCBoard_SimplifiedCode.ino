@@ -67,7 +67,7 @@ boolean readTemp = false;
 boolean saveData = false;
 boolean allOff = false;
 boolean ls = false;// List SD card directory flag
-unsigned int Interval = 3;//default Interval
+unsigned int Interval = 2;//default Interval
 boolean printAcqRate = false;
 boolean setAcqRate = false;
 double  acqInterval = 0;
@@ -310,10 +310,10 @@ void parseSerialInput(void) {
 		}// End else
 	}// End if s
 	if (*inbuffPtr == 'W') { // Open loop duty cycle setting with data acquisition:
-		//saveData = true;
+		saveData = true;
 		setDC = true;
 		readTemp = true;
-		//createFile = true;
+		createFile = true;
 		numDataPoints = 0;
 		ttime = 0.0;
 		*inbuffPtr++;
@@ -485,8 +485,8 @@ void loop() { // All other function calls occur here.
 		if (iDC < 0)iDC = 0;// Saturate duty cycles below zero or above 1023.
 		if (iDC > 1023) iDC = 1023;
 		Timer3.pwm(ACTIVE_PWM, iDC);//Set DC
-    Serial.print(iDC);
-    Serial.print("\n");
+    	Serial.print(iDC);
+    	Serial.print("\n");
 		setDC = false;
 		for (i = 0; i < sizeof(dcStr); i++) { // Flush dcStr buffer.
 			dcStr[i] = '\0';
