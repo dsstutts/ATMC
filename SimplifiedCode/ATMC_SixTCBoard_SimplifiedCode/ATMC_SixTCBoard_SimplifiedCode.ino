@@ -45,7 +45,6 @@ double temp[NUM_TCs];
 unsigned int ACTIVE_PWM = HEATER_PIN_A;
 
 // These control the data acquisition rate from 100 ms to 4 s:
-unsigned int ACTIVE_PWM = HEATER_PIN_A;
 double updateIntervals[] = {100.0, 200.0, 300.0, 400.0, 500.0, 600.0, 700.0,                                              
 800.0, 900.0, 1000.0, 4000.0};
 volatile char inbuff[200];
