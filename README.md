@@ -3,6 +3,8 @@ Arduino Temperature Measurment and Control (ATMC)
 This project seeks to develop Arduino applications and libraries to enable mechanical engineering students at Missouri University of Science and Technology to use Arduino hardware to perform common experimental data acquisition and control functions.   The Arduino application, ATMC, and its variants, can measure up to 18 temperatures, while controlling up to three, using the MAX31856 SPI thermocouple interface chip for measurement, and PID-controlled pulse width modulation (PWM) for boundary temperature control.  ATMC and its variants can also control the boundary flux by fixing the 
 PWM duty cycle.
 
+I recently (10/27/2025) added a subdirectory MultiPoint_Harmonic_Method containing both the Aduino and Python analysis codes, along with an example data file.  At present, the analysis code definitely works, but will require some setup on your computer to work for you without modification.  First of all, you'll need all of the required Python modules, and as presently configured, a working installation of LaTeX, because I use LaTeX to format symbols on the matplotlib-generated figures.  This requirement can be removed, and you're welcome to fork a branch to do so!  I've not recently tested the Arduino code, and it will definitely need to be reconfigured to work for you.  Mainly, you'll need to adjust the pin assignments.  It's currently configured for our new (still prototype) 18 TC PC board.  
+
 The following is currently what is returned by entering h on the command line:
 [We are in the process of cleaning up this code, so this will change!]
 I support the following commands:\r\n \\
