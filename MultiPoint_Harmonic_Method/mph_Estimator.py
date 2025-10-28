@@ -100,8 +100,8 @@ mm = 1  # Set index to pick different windspeeds if necessary
 
 # Select material:
 
-Al = False
-SS = True
+Al = True
+SS = False
 Cu = False
 
 
@@ -731,7 +731,7 @@ sheet1.cell(row=9, column=4, value=ci_hi[1])
 wb.save(str(excelsaveloc / f"{filesave}.xlsx"))
 
 out_dir = Path("FIGS")
-fname_base = "all_x_overlay"
+fname_base = filename
 
 # PNG for PPT slides:
 png_path = plot_all_x_overlay(
