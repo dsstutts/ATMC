@@ -10,10 +10,10 @@
 # separated.
 #
 # The output consists of a plots of the boundary input model and overall harmonic
-# model with using the optimal parameters found based on the input data,
+# model using the optimal parameters found based on the input data,
 # and an excel document containing the relevant results.
 #
-# The estimation is performed by using the scipy.optimize.least_squares function. For
+# The estimation is performed using the scipy.optimize.least_squares function. For
 # each estimation, the optimal parameters, mean standard error, and individual
 # parameter uncertainties are calculated.
 #
@@ -55,7 +55,6 @@ import scipy.stats
 from numpy import array
 import re
 
-# from xlwt import Workbook # Writing to an excel
 import array as arr
 from pathlib import Path
 import matplotlib.pyplot as plt
@@ -76,13 +75,13 @@ mpl.rcParams.update(
         "svg.fonttype": "none",  # keep text as text (if you export SVG)
     }
 )
-
+# from openpyxl import Workbook # Writing to an Excel file:
 from openpyxl import Workbook
 
 wb = Workbook()
 # rename the default sheet (or create a new one)
 sheet1 = wb.active
-# plottype = ''# Defaults to PNG
+# plottype = ''# Defaults to PDF
 plottype = "PDF"
 # Set the desired resolution:
 PLOT_DPI = 120  # Dpi.  Fine for PDF, but should use higher for PNG.
