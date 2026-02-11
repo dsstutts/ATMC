@@ -280,7 +280,7 @@ void parseSerialInput(void) {
 		return;
 	}
 	if (*inbuffPtr == 'a') { //Stop everything and save data.
-		saveData = false;
+		saveData = true;
 		allOff = true;
 		return;
 	}
