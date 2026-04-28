@@ -602,27 +602,38 @@ void parseSerialInput(void) {
     allOff = true;
     return;
   }
+
+if (*inbuffPtr == 's') {
+    inbuffPtr++;  // move past initial 's'
+
     if (*inbuffPtr == 's') {
-    *inbuffPtr++;//increment pointer to second character
-    if (*inbuffPtr++ == 's') { //Set print settings flag and return.
-      printAcqRate = true;
-      return;
+        printAcqRate = true;
+        return;
     }
-    else
-    {
-      *inbuffPtr--;// Decrement pointer
-      setAcqRate = true;
-      while ((*inbuffPtr != '\0')) {
+
+    setAcqRate = true;
+
+    i = 0;
+
+    while (*inbuffPtr != '\0') {
         if ((*inbuffPtr >= '0') && (*inbuffPtr <= '9')) {
-          dataStr[i] = *inbuffPtr;//Make sure they're numeric!  
+            dataStr[i++] = *inbuffPtr;
         }
-        *inbuffPtr++;//Increment buffer pointer.
-        i++;
-      }
-      Interval = (unsigned int)atoi(dataStr);//
-      if(controlOn&&(Interval>10))controlErr1 = true;//Trap invalid control update interval error
-    }//End else
-  }// End if s
+
+        inbuffPtr++;
+    }
+
+    dataStr[i] = '\0';
+
+    if (i > 0) {
+        Interval = (unsigned int)atoi(dataStr);
+
+        if (controlOn && (Interval > 10)) {
+            controlErr1 = true;
+        }
+    }
+}// End if s
+
   if (*inbuffPtr == 'q') { //settemp
     while (*inbuffPtr != '\0') {
       if (((*inbuffPtr >= '0') && (*inbuffPtr <= '9')) || (*inbuffPtr == '.')) { // Make 
@@ -699,7 +710,7 @@ void parseSerialInput(void) {
     return;
   } // End of if W
 
-  if (*inbuffPtr == 'c') { 
+  if (*inbuffPtr == 'c') { //Turn off w/o saving data
     saveData = false;
     allOff = true;
     return;
@@ -714,7 +725,7 @@ void parseSerialInput(void) {
     return;
   }
 
-  if(*inbuffPtr == 'l')
+  if(*inbuffPtr == 'l')// Read data directory and print file names to serial
     {
       ls = true;
       return;
@@ -732,7 +743,7 @@ void parseSerialInput(void) {
       setGains = true;
       while (*inbuffPtr != '\0') {
 
-        switch (*inbuffPtr) {
+        switch (*inbuffPtr) {//Set PID gains
           case 'p':
             setKp = true;
             kpSet = true;

@@ -866,27 +866,36 @@ void parseSerialInput(void) {
       ls = true;
       return;
     }
-  if (*inbuffPtr == 's') {
-    *inbuffPtr++;//increment pointer to second character
-    if (*inbuffPtr++ == 's') { //Set print settings flag and return.
-      printAcqRate = true;
-      return;
+if (*inbuffPtr == 's') {
+    inbuffPtr++;  // move past initial 's'
+
+    if (*inbuffPtr == 's') {
+        printAcqRate = true;
+        return;
     }
-    else
-    {
-      *inbuffPtr--;// Decrement pointer
-      setAcqRate = true;
-      while ((*inbuffPtr != '\0')) {
+
+    setAcqRate = true;
+
+    i = 0;
+
+    while (*inbuffPtr != '\0') {
         if ((*inbuffPtr >= '0') && (*inbuffPtr <= '9')) {
-          dataStr[i] = *inbuffPtr;//Make sure they're numeric!
+            dataStr[i++] = *inbuffPtr;
         }
-        *inbuffPtr++;//Increment buffer pointer.
-        i++;
-      }
-      Interval = (unsigned int)atoi(dataStr);//
-      if(controlOn&&(Interval>10))controlErr1 = true;//Trap invalid control update interval error
-    }//End else
-  }// End if s
+
+        inbuffPtr++;
+    }
+
+    dataStr[i] = '\0';
+
+    if (i > 0) {
+        Interval = (unsigned int)atoi(dataStr);
+
+        if (controlOn && (Interval > 10)) {
+            controlErr1 = true;
+        }
+    }
+}// End if s
 if (*inbuffPtr == 'f')
 {
    while ((*inbuffPtr != '\0'))
