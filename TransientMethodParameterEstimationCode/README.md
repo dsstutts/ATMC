@@ -1,4 +1,4 @@
-# `oneDkhEstimator_parallel_v2_3_0.py`
+# `oneDkhEstimator.py`
 
 Modernized 1-D transient convection parameter estimator for rod cooling/heating data.
 
@@ -21,7 +21,7 @@ The easiest layout is:
 
 ```text
 project_directory/
-├── oneDkhEstimator_parallel_v2_3_0.py
+├── oneDkhEstimator.py
 ├── data/
 │   ├── 50al1.csv
 │   ├── 75al2.csv
@@ -36,7 +36,7 @@ By default, the script looks for a `data/` directory next to the script. If no `
 You can override the data and output locations:
 
 ```bash
-python oneDkhEstimator_parallel_v2_3_0.py \
+python oneDkhEstimator.py \
   --data-dir /path/to/data \
   --output-dir /path/to/results
 ```
@@ -125,7 +125,7 @@ That means the script scans the data directory for `.csv` files, infers the mate
 Example:
 
 ```bash
-python oneDkhEstimator_parallel_v2_3_0.py --material all --test temp
+python oneDkhEstimator.py --material all --test temp
 ```
 
 Typical startup output:
@@ -160,7 +160,7 @@ CSV files whose material cannot be inferred are skipped silently in discovery mo
 Example:
 
 ```bash
-python oneDkhEstimator_parallel_v2_3_0.py \
+python oneDkhEstimator.py \
   --material al \
   --files my_special_aluminum_test.csv
 ```
@@ -172,25 +172,25 @@ python oneDkhEstimator_parallel_v2_3_0.py \
 ### Run all discovered aluminum files
 
 ```bash
-python oneDkhEstimator_parallel_v2_3_0.py
+python oneDkhEstimator.py
 ```
 
 This is equivalent to:
 
 ```bash
-python oneDkhEstimator_parallel_v2_3_0.py --material al --test temp
+python oneDkhEstimator.py --material al --test temp
 ```
 
 ### Run all discovered aluminum, copper, and stainless files
 
 ```bash
-python oneDkhEstimator_parallel_v2_3_0.py --material all --test temp
+python oneDkhEstimator.py --material all --test temp
 ```
 
 ### Run selected files only
 
 ```bash
-python oneDkhEstimator_parallel_v2_3_0.py \
+python oneDkhEstimator.py \
   --material al \
   --files 50al1 75al2 100al3
 ```
@@ -208,7 +208,7 @@ The original code had hard-coded expected file lists such as:
 To use those expected lists instead of directory discovery:
 
 ```bash
-python oneDkhEstimator_parallel_v2_3_0.py \
+python oneDkhEstimator.py \
   --material al \
   --test temp \
   --expected-list
@@ -217,7 +217,7 @@ python oneDkhEstimator_parallel_v2_3_0.py \
 By default, missing files in the expected list are skipped quietly. To print the missing expected-list paths:
 
 ```bash
-python oneDkhEstimator_parallel_v2_3_0.py \
+python oneDkhEstimator.py \
   --material al \
   --test temp \
   --expected-list \
@@ -227,7 +227,7 @@ python oneDkhEstimator_parallel_v2_3_0.py \
 To make missing expected files an error:
 
 ```bash
-python oneDkhEstimator_parallel_v2_3_0.py \
+python oneDkhEstimator.py \
   --material al \
   --test temp \
   --expected-list \
@@ -243,7 +243,7 @@ The data files are independent, so the script parallelizes at the file level. On
 Automatic mode is the default:
 
 ```bash
-python oneDkhEstimator_parallel_v2_3_0.py --jobs 0
+python oneDkhEstimator.py --jobs 0
 ```
 
 `--jobs 0` means:
@@ -257,9 +257,9 @@ So if the machine has 16 cores but only 9 files are selected, the script uses at
 Manual examples:
 
 ```bash
-python oneDkhEstimator_parallel_v2_3_0.py --jobs 1   # serial
-python oneDkhEstimator_parallel_v2_3_0.py --jobs 4   # four worker processes
-python oneDkhEstimator_parallel_v2_3_0.py --jobs 8   # eight worker processes
+python oneDkhEstimator.py --jobs 1   # serial
+python oneDkhEstimator.py --jobs 4   # four worker processes
+python oneDkhEstimator.py --jobs 8   # eight worker processes
 ```
 
 ### Practical speed recommendation
@@ -297,13 +297,13 @@ N = 100
 The modernized script keeps that default:
 
 ```bash
-python oneDkhEstimator_parallel_v2_3_0.py --N 100
+python oneDkhEstimator.py --N 100
 ```
 
 For quick smoke testing:
 
 ```bash
-python oneDkhEstimator_parallel_v2_3_0.py --N 10 --max-nfev 20
+python oneDkhEstimator.py --N 10 --max-nfev 20
 ```
 
 For production runs, use the default or a convergence-tested larger value.
@@ -323,25 +323,25 @@ FIGS/<filename>_fit.pdf
 Change the base results filename:
 
 ```bash
-python oneDkhEstimator_parallel_v2_3_0.py --results-name April_2026_rod_tests
+python oneDkhEstimator.py --results-name April_2026_rod_tests
 ```
 
 Change the plot directory:
 
 ```bash
-python oneDkhEstimator_parallel_v2_3_0.py --plots-dir /path/to/plot_directory
+python oneDkhEstimator.py --plots-dir /path/to/plot_directory
 ```
 
 Add fitted values to the plot title:
 
 ```bash
-python oneDkhEstimator_parallel_v2_3_0.py --title
+python oneDkhEstimator.py --title
 ```
 
 Show plots interactively:
 
 ```bash
-python oneDkhEstimator_parallel_v2_3_0.py --show
+python oneDkhEstimator.py --show
 ```
 
 When `--show` is used, the script automatically forces serial execution because interactive plotting and multiprocessing do not mix reliably.
@@ -454,13 +454,13 @@ def infer_material_key_from_filename(stem: str) -> str | None:
 Now this will work:
 
 ```bash
-python oneDkhEstimator_parallel_v2_3_0.py --material br
+python oneDkhEstimator.py --material br
 ```
 
 and this will include brass too:
 
 ```bash
-python oneDkhEstimator_parallel_v2_3_0.py --material all
+python oneDkhEstimator.py --material all
 ```
 
 provided `br` has been added to the `choices` tuple and to `MATERIALS`.
@@ -540,7 +540,7 @@ The `lm` method does not enforce bounds in SciPy's `least_squares`, so it may ex
 Limit the number of function evaluations for quick tests:
 
 ```bash
-python oneDkhEstimator_parallel_v2_3_0.py --max-nfev 50
+python oneDkhEstimator.py --max-nfev 50
 ```
 
 ---
@@ -552,13 +552,13 @@ After adding or changing a material, run this sequence:
 ### 1. Syntax check
 
 ```bash
-python -m py_compile oneDkhEstimator_parallel_v2_3_0.py
+python -m py_compile oneDkhEstimator.py
 ```
 
 ### 2. Fast smoke test on one file
 
 ```bash
-python oneDkhEstimator_parallel_v2_3_0.py \
+python oneDkhEstimator.py \
   --material br \
   --files 50br1 \
   --N 10 \
@@ -569,7 +569,7 @@ python oneDkhEstimator_parallel_v2_3_0.py \
 ### 3. Full single-file run
 
 ```bash
-python oneDkhEstimator_parallel_v2_3_0.py \
+python oneDkhEstimator.py \
   --material br \
   --files 50br1 \
   --N 100 \
@@ -579,7 +579,7 @@ python oneDkhEstimator_parallel_v2_3_0.py \
 ### 4. Full batch run
 
 ```bash
-python oneDkhEstimator_parallel_v2_3_0.py \
+python oneDkhEstimator.py \
   --material br \
   --N 100 \
   --jobs 0
@@ -609,7 +609,7 @@ Check that:
 Example:
 
 ```bash
-python oneDkhEstimator_parallel_v2_3_0.py \
+python oneDkhEstimator.py \
   --material al \
   --files my_file_without_al_in_the_name.csv
 ```
@@ -654,7 +654,7 @@ If oversubscription seems likely, try launching with threaded BLAS limited to on
 
 ```bash
 OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 \
-python oneDkhEstimator_parallel_v2_3_0.py --material all --jobs 9
+python oneDkhEstimator.py --material all --jobs 9
 ```
 
 ---
