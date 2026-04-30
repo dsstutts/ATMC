@@ -15,6 +15,8 @@
     - Avoids heap-fragmenting String concatenation in the data logging path.
     - Adds optional RTClib/DS3231 RTC support, version reporting, compile-time
       RTC setting, and descriptive CSV metadata headers.
+    - Scans the SD root directory at startup so log-file numbering resumes after
+      the highest existing LOG#####.CSV file instead of starting from zero.
 
   Notes:
     - The previous Timer3-based 25 kHz PWM is not portable. This version favors
@@ -37,15 +39,27 @@
   #define THC_ENABLE_RTC 1
 #endif
 
-#if THC_ENABLE_RTC && defined(__has_include)
-  #if __has_include(<RTClib.h>)
-    #include <Wire.h>
-    #include <RTClib.h>
-    #define THC_HAS_RTC 1
-  #endif
+// RTC selection.  The original ATMC sketch used Adafruit RTClib's
+// RTC_PCF8523 type, which is common on Adafruit data-logging shields.
+// Change THC_RTC_TYPE to THC_RTC_DS3231 if your board uses a DS3231.
+#define THC_RTC_NONE    0
+#define THC_RTC_DS3231  1
+#define THC_RTC_PCF8523 2
+
+#ifndef THC_RTC_TYPE
+  #define THC_RTC_TYPE THC_RTC_PCF8523
 #endif
 
-#ifndef THC_HAS_RTC
+#if THC_ENABLE_RTC && (THC_RTC_TYPE != THC_RTC_NONE)
+  // Intentionally include RTClib directly instead of relying on __has_include,
+  // because some Arduino AVR toolchains/preprocessors do not define
+  // __has_include reliably.  If you do not have RTClib installed, either
+  // install "RTClib by Adafruit" from Library Manager or set
+  // THC_ENABLE_RTC to 0 above.
+  #include <Wire.h>
+  #include <RTClib.h>
+  #define THC_HAS_RTC 1
+#else
   #define THC_HAS_RTC 0
 #endif
 
@@ -77,13 +91,36 @@
 
 static const uint32_t SERIAL_BAUD = 250000UL;
 
+// Give USB/serial adapters and the Arduino Serial Monitor time to settle before
+// printing the startup banner. This is especially helpful on boards such as
+// the Mega, where the bootloader/reset sequence can otherwise leave the first
+// few characters looking like baud-rate gibberish even though later text is OK.
+#ifndef THC_SERIAL_STARTUP_DELAY_MS
+  #define THC_SERIAL_STARTUP_DELAY_MS 1500UL
+#endif
+
+#ifndef THC_SERIAL_READY_TIMEOUT_MS
+  #define THC_SERIAL_READY_TIMEOUT_MS 3000UL
+#endif
+
+#ifndef THC_PRINT_STARTUP_DIAGNOSTICS
+  #define THC_PRINT_STARTUP_DIAGNOSTICS 1
+#endif
+
+// Arduino IDE 2.x Serial Monitor autoscroll can miss very large startup bursts.
+// This small pace delay makes the boot text easier to follow on a Mega without
+// introducing delay() into the data-acquisition loop. Set to 0 to disable.
+#ifndef THC_SERIAL_STARTUP_PACE_MS
+  #define THC_SERIAL_STARTUP_PACE_MS 2UL
+#endif
+
 // Program/version metadata. Increment these whenever the sketch behavior changes.
 #define THC_PROGRAM_NAME       "ATMC Six Thermocouple Board"
 #define THC_PROGRAM_SHORT_NAME "ATMC_SixTCBoard"
 #define THC_VERSION_MAJOR      2
-#define THC_VERSION_MINOR      1
+#define THC_VERSION_MINOR      4
 #define THC_VERSION_PATCH      0
-#define THC_VERSION_STRING     "2.1.0"
+#define THC_VERSION_STRING     "2.4.0"
 #define THC_BUILD_DATE         __DATE__
 #define THC_BUILD_TIME         __TIME__
 #define THC_BUILD_STAMP        __DATE__ " " __TIME__
@@ -137,7 +174,7 @@ static const uint8_t  PWM_BITS    = 10;
 static const uint16_t PWM_MAX     = (1U << PWM_BITS) - 1U;  // 1023
 static const uint32_t PWM_FREQ_HZ = 25000UL;                // Used where supported.
 
-static const uint16_t MAX_LOG_FILES = 10000;
+static const uint32_t MAX_LOG_FILES = 100000UL;
 static const uint8_t  NUM_TCS       = 6;
 static const uint8_t  CSs[NUM_TCS]  = {TC1, TC2, TC3, TC4, TC5, TC6};
 
@@ -194,11 +231,26 @@ static uint16_t currentDuty = 0;
 static bool sdReady = false;
 static bool logFileOpen = false;
 static File logfile;
+static char currentLogFilename[13] = "";
+static bool csvHeaderWritten = false;
+static uint32_t nextLogFileNumber = 0;
+static bool logFileScanDone = false;
 
 #if THC_HAS_RTC
-static RTC_DS3231 rtc;
+  #if THC_RTC_TYPE == THC_RTC_DS3231
+    static RTC_DS3231 rtc;
+  #elif THC_RTC_TYPE == THC_RTC_PCF8523
+    static RTC_PCF8523 rtc;
+  #else
+    #error "Unsupported THC_RTC_TYPE. Use THC_RTC_DS3231, THC_RTC_PCF8523, or THC_RTC_NONE."
+  #endif
 #endif
 static bool rtcReady = false;
+
+static void printStartupDiagnostics();
+static void clearPendingSerialInput();
+static bool scanLogFileNumbers();
+static void printNextLogFilename(Stream &out);
 
 // --------------------------- MAX31856 register setup ---------------------------
 
@@ -248,6 +300,13 @@ static bool rtcReady = false;
 
 // ------------------------------ Utility helpers --------------------------------
 
+static void serialStartupPace() {
+#if THC_SERIAL_STARTUP_PACE_MS > 0
+  Serial.flush();
+  delay((uint32_t)THC_SERIAL_STARTUP_PACE_MS);
+#endif
+}
+
 static void printLine(Stream &out, const __FlashStringHelper *text) {
   out.println(text);
 }
@@ -261,7 +320,8 @@ static void printHelp(Stream &out) {
   printLine(out, F("  a -- Stop everything, save data, close the file, and wait until restart."));
   printLine(out, F("  h -- List supported commands."));
   printLine(out, F("  v -- Print program, version, build, board, PWM, and RTC status."));
-  printLine(out, F("  l -- List files on the SD card."));
+  printLine(out, F("  d -- Print startup/runtime diagnostics."));
+  printLine(out, F("  l -- List files on the SD card and show the next log filename."));
   printLine(out, F("  L -- Log data to a new CSV file."));
   printLine(out, F("  tt -- Tell RTC time, if an RTC is available."));
   printLine(out, F("  tb -- Set RTC to this sketch's compile/build date and time."));
@@ -394,6 +454,18 @@ static void eepromWriteU32(uint16_t addr, uint32_t value) {
 }
 #endif
 
+static const __FlashStringHelper *rtcTypeName() {
+#if !THC_HAS_RTC
+  return F("none / not compiled");
+#elif THC_RTC_TYPE == THC_RTC_DS3231
+  return F("DS3231");
+#elif THC_RTC_TYPE == THC_RTC_PCF8523
+  return F("PCF8523");
+#else
+  return F("unknown");
+#endif
+}
+
 static void printVersionInfo(Stream &out) {
   out.print(F("Program: "));
   out.println(F(THC_PROGRAM_NAME));
@@ -424,6 +496,8 @@ static void printVersionInfo(Stream &out) {
   out.println(F(" Hz"));
   out.print(F("RTC compiled: "));
   out.println(THC_HAS_RTC ? F("yes") : F("no"));
+  out.print(F("RTC type: "));
+  out.println(rtcTypeName());
   out.print(F("RTC detected: "));
   out.println(rtcReady ? F("yes") : F("no"));
 }
@@ -629,19 +703,37 @@ static void initRtc() {
 
   if (!rtc.begin()) {
     rtcReady = false;
+    Serial.print(F("RTC type configured: "));
+    Serial.println(rtcTypeName());
     Serial.println(F("RTC not detected. Time commands and log-start timestamps are disabled."));
+    Serial.println(F("RTC diagnostics: check SDA/SCL wiring, 5V/GND, I2C address, and that THC_RTC_TYPE matches the installed chip."));
     return;
   }
 
   rtcReady = true;
-  Serial.println(F("RTC detected."));
+  Serial.print(F("RTC detected: "));
+  Serial.println(rtcTypeName());
 
   bool shouldSetToBuildTime = false;
 
-  if (rtc.lostPower()) {
-    Serial.println(F("RTC reports lost power; setting RTC to build time."));
+#if THC_RTC_TYPE == THC_RTC_PCF8523
+  if (!rtc.initialized()) {
+    Serial.println(F("RTC reports that it has not been initialized; setting RTC to build time."));
     shouldSetToBuildTime = true;
   }
+#endif
+
+  if (rtc.lostPower()) {
+    Serial.println(F("RTC reports lost power; setting RTC to build time."));
+    Serial.println(F("RTC diagnostic: if this message appears after every power cycle, replace/check the RTC coin cell."));
+    shouldSetToBuildTime = true;
+  }
+
+#if THC_RTC_TYPE == THC_RTC_PCF8523
+  // Harmless if the oscillator is already running; important after first setup
+  // or after the oscillator has been stopped.
+  rtc.start();
+#endif
 
 #if THC_FORCE_RTC_BUILD_TIME_ON_EVERY_BOOT
   Serial.println(F("THC_FORCE_RTC_BUILD_TIME_ON_EVERY_BOOT is enabled."));
@@ -931,21 +1023,191 @@ static bool verifyChannel(uint8_t csPin) {
 // ------------------------------ SD card helpers --------------------------------
 
 static bool initSdCard() {
-  Serial.print(F("Initializing SD card... "));
+  Serial.print(F("Initializing SD card on CS pin "));
+  Serial.print(SDCS);
+  Serial.print(F("... "));
 
   pinMode(SDCS, OUTPUT);
   digitalWrite(SDCS, HIGH);
 
   if (!SD.begin(SDCS)) {
-    Serial.println(F("failed or not present."));
+    Serial.println(F("FAILED."));
+    Serial.println(F("SD diagnostics: check card insertion, FAT/FAT32 formatting, wiring, chip-select pin, and shared SPI wiring."));
     return false;
   }
 
   Serial.println(F("ready."));
+
+  File root = SD.open("/");
+  if (root) {
+    Serial.println(F("SD root directory opened successfully."));
+    root.close();
+  } else {
+    Serial.println(F("WARNING: SD.begin succeeded, but SD root directory could not be opened."));
+  }
+
+  // Establish the next log-file number from the card contents. This prevents
+  // overwriting or reusing lower numbers after a reset/reprogram cycle.
+  // Uses the common SD File::openNextFile() directory iteration API instead of
+  // library-specific ls() calls.
+  scanLogFileNumbers();
+
   return true;
 }
 
-static void writeCsvHeader() {
+static const char *baseNameOnly(const char *name) {
+  if (name == NULL) {
+    return "";
+  }
+
+  const char *slash1 = strrchr(name, '/');
+  const char *slash2 = strrchr(name, '\\');
+  const char *base = name;
+
+  if (slash1 && slash1 + 1 > base) {
+    base = slash1 + 1;
+  }
+  if (slash2 && slash2 + 1 > base) {
+    base = slash2 + 1;
+  }
+
+  return base;
+}
+
+static bool parseLogFilenameIndex(const char *name, uint32_t &indexOut) {
+  const char *base = baseNameOnly(name);
+
+  // Expected 8.3 name: LOG00000.CSV. Match case-insensitively because some
+  // SD libraries report lowercase names.
+  if (strlen(base) != 12) {
+    return false;
+  }
+
+  if (toupper((unsigned char)base[0]) != 'L' ||
+      toupper((unsigned char)base[1]) != 'O' ||
+      toupper((unsigned char)base[2]) != 'G') {
+    return false;
+  }
+
+  uint32_t value = 0;
+  for (uint8_t i = 3; i < 8; ++i) {
+    if (!isdigit((unsigned char)base[i])) {
+      return false;
+    }
+    value = value * 10UL + (uint32_t)(base[i] - '0');
+  }
+
+  if (base[8] != '.' ||
+      toupper((unsigned char)base[9])  != 'C' ||
+      toupper((unsigned char)base[10]) != 'S' ||
+      toupper((unsigned char)base[11]) != 'V') {
+    return false;
+  }
+
+  if (value >= MAX_LOG_FILES) {
+    return false;
+  }
+
+  indexOut = value;
+  return true;
+}
+
+static bool scanLogFileNumbers() {
+  nextLogFileNumber = 0;
+  logFileScanDone = false;
+
+  if (!sdReady) {
+    Serial.println(F("Cannot scan SD log files: SD card is not ready."));
+    return false;
+  }
+
+  File root = SD.open("/");
+  if (!root) {
+    Serial.println(F("Cannot scan SD log files: root directory could not be opened."));
+    return false;
+  }
+
+  uint32_t highest = 0;
+  bool foundAny = false;
+  uint16_t entryCount = 0;
+
+  while (true) {
+    File entry = root.openNextFile();
+    if (!entry) {
+      break;
+    }
+
+    ++entryCount;
+    if (!entry.isDirectory()) {
+      uint32_t idx = 0;
+      if (parseLogFilenameIndex(entry.name(), idx)) {
+        if (!foundAny || idx > highest) {
+          highest = idx;
+        }
+        foundAny = true;
+      }
+    }
+
+    entry.close();
+  }
+
+  root.close();
+
+  if (foundAny) {
+    if (highest + 1UL < MAX_LOG_FILES) {
+      nextLogFileNumber = highest + 1UL;
+      logFileScanDone = true;
+      Serial.print(F("Highest existing log file index: "));
+      Serial.print(highest);
+      Serial.print(F("; next log file will be "));
+      char tmp[13];
+      snprintf(tmp, sizeof(tmp), "LOG%05lu.CSV", (unsigned long)nextLogFileNumber);
+      Serial.println(tmp);
+      return true;
+    }
+
+    Serial.println(F("All LOG#####.CSV names appear to be used; cannot choose a new log filename."));
+    nextLogFileNumber = MAX_LOG_FILES;
+    logFileScanDone = true;
+    return false;
+  }
+
+  nextLogFileNumber = 0;
+  logFileScanDone = true;
+  Serial.print(F("No existing LOG#####.CSV files found among "));
+  Serial.print(entryCount);
+  Serial.println(F(" root-directory entries; next log file will be LOG00000.CSV."));
+  return true;
+}
+
+static void printNextLogFilename(Stream &out) {
+  if (!sdReady) {
+    out.println(F("Next log filename unknown: SD card is not ready."));
+    return;
+  }
+
+  if (!logFileScanDone) {
+    scanLogFileNumbers();
+  }
+
+  if (nextLogFileNumber >= MAX_LOG_FILES) {
+    out.println(F("Next log filename unavailable: LOG#####.CSV file-number limit reached."));
+    return;
+  }
+
+  char filename[13];
+  snprintf(filename, sizeof(filename), "LOG%05lu.CSV", (unsigned long)nextLogFileNumber);
+  out.print(F("Next log filename: "));
+  out.println(filename);
+}
+
+static bool writeCsvHeader() {
+  if (!logfile) {
+    Serial.println(F("Cannot write CSV header: log file is not open."));
+    csvHeaderWritten = false;
+    return false;
+  }
+
   logfile.print(F("# Program,"));
   logfile.println(F(THC_PROGRAM_NAME));
   logfile.print(F("# Version,"));
@@ -986,7 +1248,16 @@ static void writeCsvHeader() {
   }
   logfile.println(F(",power_command"));
   logfile.flush();
+
+  csvHeaderWritten = true;
+  Serial.print(F("CSV header written to "));
+  Serial.print(currentLogFilename[0] ? currentLogFilename : "<unnamed>");
+  Serial.print(F("; file size is now "));
+  Serial.print(logfile.size());
+  Serial.println(F(" bytes."));
+  return true;
 }
+
 static bool openNewLogFile() {
   if (!sdReady) {
     Serial.println(F("Cannot open log file: SD card is not ready."));
@@ -997,10 +1268,14 @@ static bool openNewLogFile() {
     return true;
   }
 
+  if (!logFileScanDone) {
+    scanLogFileNumbers();
+  }
+
   char filename[13];  // 8.3 name: LOG00000.CSV plus NUL.
 
-  for (uint16_t n = 0; n < MAX_LOG_FILES; ++n) {
-    snprintf(filename, sizeof(filename), "LOG%05u.CSV", n);
+  for (uint32_t n = nextLogFileNumber; n < MAX_LOG_FILES; ++n) {
+    snprintf(filename, sizeof(filename), "LOG%05lu.CSV", (unsigned long)n);
 
     if (!SD.exists(filename)) {
       logfile = SD.open(filename, FILE_WRITE);
@@ -1010,21 +1285,46 @@ static bool openNewLogFile() {
         return false;
       }
 
+      strncpy(currentLogFilename, filename, sizeof(currentLogFilename));
+      currentLogFilename[sizeof(currentLogFilename) - 1] = '\0';
+      csvHeaderWritten = false;
+
       Serial.print(F("Logging to "));
-      Serial.println(filename);
-      writeCsvHeader();
+      Serial.println(currentLogFilename);
+
+      if (!writeCsvHeader()) {
+        Serial.println(F("Failed to write CSV header; closing log file."));
+        logfile.close();
+        currentLogFilename[0] = '\0';
+        logFileOpen = false;
+        return false;
+      }
+
       logFileOpen = true;
+      nextLogFileNumber = n + 1UL;
+      logFileScanDone = true;
       return true;
     }
   }
 
   Serial.println(F("Could not create a log file: file-number limit reached."));
+  currentLogFilename[0] = '\0';
+  csvHeaderWritten = false;
   return false;
 }
 
 static void writeDataToSD() {
   if (!logFileOpen) {
+    Serial.println(F("writeDataToSD called, but no log file is open."));
     return;
+  }
+
+  if (!csvHeaderWritten) {
+    Serial.println(F("CSV header was not marked as written; attempting to write it now."));
+    if (!writeCsvHeader()) {
+      Serial.println(F("Cannot write data because the CSV header failed."));
+      return;
+    }
   }
 
   logfile.print(elapsedLogTimeS, 3);
@@ -1086,6 +1386,10 @@ static void listSdFiles() {
   Serial.println(F("Files found on the card:"));
   listDirectory(root, 1);
   root.close();
+
+  // Re-scan after listing in case the card was modified outside the sketch.
+  scanLogFileNumbers();
+  printNextLogFilename(Serial);
 }
 
 // ----------------------------- Command processing -----------------------------
@@ -1159,8 +1463,15 @@ static void printAcquisitionInterval(Stream &out) {
 }
 
 static void startLogging() {
+  Serial.println(F("Logging requested."));
+  if (!sdReady) {
+    Serial.println(F("WARNING: SD card is not ready, so no file can be created yet."));
+  }
   if (!logFileOpen) {
     createFile = true;
+  } else {
+    Serial.print(F("Continuing existing log file: "));
+    Serial.println(currentLogFilename);
   }
   saveData = true;
   numDataPoints = 0;
@@ -1182,6 +1493,11 @@ static void parseSerialInput() {
 
   if (strcmp(cmd, "v") == 0) {
     printVersionInfo(Serial);
+    return;
+  }
+
+  if (strcmp(cmd, "d") == 0) {
+    printStartupDiagnostics();
     return;
   }
 
@@ -1281,6 +1597,8 @@ static void stopAllAndHalt() {
     logfile.flush();
     logfile.close();
     logFileOpen = false;
+    csvHeaderWritten = false;
+    currentLogFilename[0] = '\0';
   }
 
   Serial.println(F("Stopped. Heaters are off and the log file is closed. Reset the board to restart."));
@@ -1290,18 +1608,89 @@ static void stopAllAndHalt() {
   }
 }
 
+
+static void clearPendingSerialInput() {
+  while (Serial.available() > 0) {
+    (void)Serial.read();
+  }
+}
+
+static void printStartupDiagnostics() {
+#if THC_PRINT_STARTUP_DIAGNOSTICS
+  Serial.println(F("\n--- Startup/runtime diagnostics ---"));
+  Serial.print(F("Serial baud: "));
+  Serial.println(SERIAL_BAUD);
+  Serial.print(F("Serial startup delay: "));
+  Serial.print((uint32_t)THC_SERIAL_STARTUP_DELAY_MS);
+  Serial.println(F(" ms"));
+  Serial.print(F("Program: "));
+  Serial.println(F(THC_PROGRAM_NAME));
+  Serial.print(F("Version: "));
+  Serial.println(F(THC_VERSION_STRING));
+  Serial.print(F("Build: "));
+  Serial.print(F(THC_BUILD_DATE));
+  Serial.print(' ');
+  Serial.println(F(THC_BUILD_TIME));
+  Serial.print(F("RTC compiled: "));
+  Serial.println(THC_HAS_RTC ? F("yes") : F("no"));
+  Serial.print(F("RTC type: "));
+  Serial.println(rtcTypeName());
+  Serial.print(F("RTC detected: "));
+  Serial.println(rtcReady ? F("yes") : F("no"));
+#if THC_HAS_RTC
+  if (rtcReady) {
+    tellRtcTime(Serial);
+  }
+#endif
+  Serial.print(F("SD ready: "));
+  Serial.println(sdReady ? F("yes") : F("no"));
+  Serial.print(F("Log file open: "));
+  Serial.println(logFileOpen ? F("yes") : F("no"));
+  if (logFileOpen) {
+    Serial.print(F("Log filename: "));
+    Serial.println(currentLogFilename);
+    Serial.print(F("CSV header written: "));
+    Serial.println(csvHeaderWritten ? F("yes") : F("no"));
+    Serial.print(F("Current file size: "));
+    Serial.print(logfile.size());
+    Serial.println(F(" bytes"));
+  }
+  Serial.print(F("Save data enabled: "));
+  Serial.println(saveData ? F("yes") : F("no"));
+  Serial.print(F("Monitor data enabled: "));
+  Serial.println(monitorData ? F("yes") : F("no"));
+  Serial.print(F("Acquisition interval index: "));
+  Serial.println(intervalIndex);
+  Serial.print(F("Acquisition period ms: "));
+  Serial.println(samplePeriodMs);
+  Serial.print(F("Active PWM pin: "));
+  Serial.println(ACTIVE_PWM);
+  Serial.print(F("PWM command range: 0.."));
+  Serial.println(PWM_MAX);
+  Serial.print(F("Current duty command: "));
+  Serial.println(currentDuty);
+  Serial.println(F("--- End diagnostics ---\n"));
+#endif
+}
+
 // ---------------------------------- setup/loop ---------------------------------
 
 void setup() {
   Serial.begin(SERIAL_BAUD);
 
-  // Avoid hanging forever on boards without native USB Serial.
+  // Avoid hanging forever on boards without native USB Serial. On boards such
+  // as the Mega, Serial is ready immediately, but giving the USB/serial bridge
+  // and Serial Monitor a short settling interval greatly reduces garbled first
+  // characters after auto-reset.
   uint32_t serialStart = millis();
-  while (!Serial && (millis() - serialStart < 3000UL)) {
+  while (!Serial && (millis() - serialStart < (uint32_t)THC_SERIAL_READY_TIMEOUT_MS)) {
     delay(10);
   }
+  delay((uint32_t)THC_SERIAL_STARTUP_DELAY_MS);
+  clearPendingSerialInput();
 
   Serial.println();
+  Serial.println(F("============================================================"));
   Serial.print(F(THC_PROGRAM_NAME));
   Serial.print(F(" v"));
   Serial.println(F(THC_VERSION_STRING));
@@ -1309,11 +1698,14 @@ void setup() {
   Serial.print(F(THC_BUILD_DATE));
   Serial.print(' ');
   Serial.println(F(THC_BUILD_TIME));
-  Serial.println(F("READY"));
+  Serial.println(F("Booting..."));
+  serialStartupPace();
 
   initPersistentStorage();
   initRtc();
+  serialStartupPace();
   checkPinConfiguration();
+  serialStartupPace();
 
   uint8_t storedInterval = intervalIndex;
   if (loadIntervalIndex(storedInterval)) {
@@ -1323,11 +1715,14 @@ void setup() {
 
   initHeaters();
   allHeatersOff();
+  serialStartupPace();
 
   SPI.begin();
   initializeMAX31856Pins();
+  serialStartupPace();
 
   sdReady = initSdCard();
+  serialStartupPace();
 
   for (uint8_t k = 0; k < NUM_TCS; ++k) {
     initializeChannel(CSs[k]);
@@ -1335,12 +1730,16 @@ void setup() {
     Serial.print(F("Verifying CS pin "));
     Serial.println(CSs[k]);
     verifyChannel(CSs[k]);
+    serialStartupPace();
   }
 
   printAcquisitionInterval(Serial);
   Serial.print(F("Active PWM pin: "));
   Serial.println(ACTIVE_PWM);
+  printStartupDiagnostics();
+  Serial.println(F("READY"));
   Serial.println(F("Type h for help."));
+  Serial.println(F("If the Arduino IDE Serial Monitor does not follow new lines, enable its Autoscroll toggle."));
 }
 
 void loop() {
