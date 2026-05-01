@@ -17,6 +17,8 @@
       RTC setting, and descriptive CSV metadata headers.
     - Scans the SD root directory at startup so log-file numbering resumes after
       the highest existing LOG#####.CSV file instead of starting from zero.
+    - Adds lowercase w#### duty-cycle command to change heater duty while
+      continuing an existing log timeline without resetting elapsed_time_s.
 
   Notes:
     - The previous Timer3-based 25 kHz PWM is not portable. This version favors
@@ -76,8 +78,21 @@
   #endif
 #endif
 
-#if defined(__has_include)
-  #if __has_include(<EEPROM.h>) && !defined(ARDUINO_ARCH_SAM)
+// EEPROM support. Arduino Mega/AVR has real EEPROM, but some Arduino
+// preprocessor configurations do not reliably expose __has_include. Therefore
+// include EEPROM.h directly for known EEPROM-capable cores, then fall back to
+// __has_include for other compatible cores.
+#if defined(ARDUINO_ARCH_SAM)
+  // Arduino Due/SAM does not have built-in EEPROM.
+  #define THC_HAS_EEPROM 0
+#elif defined(ARDUINO_ARCH_AVR)
+  #include <EEPROM.h>
+  #define THC_HAS_EEPROM 1
+#elif defined(ARDUINO_ARCH_ESP32)
+  #include <EEPROM.h>
+  #define THC_HAS_EEPROM 1
+#elif defined(__has_include)
+  #if __has_include(<EEPROM.h>)
     #include <EEPROM.h>
     #define THC_HAS_EEPROM 1
   #endif
@@ -119,8 +134,8 @@ static const uint32_t SERIAL_BAUD = 250000UL;
 #define THC_PROGRAM_SHORT_NAME "ATMC_SixTCBoard"
 #define THC_VERSION_MAJOR      2
 #define THC_VERSION_MINOR      4
-#define THC_VERSION_PATCH      0
-#define THC_VERSION_STRING     "2.4.0"
+#define THC_VERSION_PATCH      2
+#define THC_VERSION_STRING     "2.4.2"
 #define THC_BUILD_DATE         __DATE__
 #define THC_BUILD_TIME         __TIME__
 #define THC_BUILD_STAMP        __DATE__ " " __TIME__
@@ -340,7 +355,8 @@ static void printHelp(Stream &out) {
   printLine(out, F("    8  --> 0.9 sec"));
   printLine(out, F("    9  --> 1.0 sec"));
   printLine(out, F("    10 --> 4.0 sec"));
-  printLine(out, F("  W#### -- Set 0..1023 duty cycle and start logging, e.g. W512."));
+  printLine(out, F("  W#### -- Set 0..1023 duty cycle and start/restart logging, e.g. W512."));
+  printLine(out, F("  w#### -- Set 0..1023 duty cycle without resetting the active log timeline."));
 }
 
 static char *trimCommand(char *s) {
@@ -1237,10 +1253,10 @@ static bool writeCsvHeader() {
   logfile.println(PWM_MAX);
   logfile.print(F("# Requested PWM frequency Hz,"));
   logfile.println(PWM_FREQ_HZ);
-  logfile.print(F("# Columns,"));
-  logfile.println(F("elapsed_time_s,rtc_time,TC1_C,TC2_C,TC3_C,TC4_C,TC5_C,TC6_C,power_command"));
 
-  logfile.print(F("elapsed_time_s,rtc_time"));
+  // Data columns only. The date/time is recorded once above in the metadata
+  // header as "# Log start date/time"; it is not repeated on every data row.
+  logfile.print(F("elapsed_time_s"));
   for (uint8_t k = 0; k < NUM_TCS; ++k) {
     logfile.print(F(",TC"));
     logfile.print(k + 1);
@@ -1328,15 +1344,6 @@ static void writeDataToSD() {
   }
 
   logfile.print(elapsedLogTimeS, 3);
-  logfile.print(',');
-#if THC_HAS_RTC
-  if (rtcReady) {
-    DateTime now = rtc.now();
-    char stamp[24];
-    formatDateTime(stamp, sizeof(stamp), now);
-    logfile.print(stamp);
-  }
-#endif
   for (uint8_t k = 0; k < NUM_TCS; ++k) {
     logfile.print(',');
     logfile.print(tempC[k], 4);
@@ -1451,6 +1458,12 @@ static void applyAcquisitionInterval(uint8_t newIndex, bool persist) {
 
   if (persist) {
     saveIntervalIndex(intervalIndex);
+#if THC_HAS_EEPROM
+    Serial.print(F("Saved acquisition interval index to EEPROM: "));
+    Serial.println(intervalIndex);
+#else
+    Serial.println(F("WARNING: EEPROM support is not compiled; acquisition interval will not persist after reset."));
+#endif
   }
 }
 
@@ -1549,6 +1562,23 @@ static void parseSerialInput() {
     return;
   }
 
+  if (cmd[0] == 'w') {
+    uint16_t duty = 0;
+    if (parseUnsignedInRange(cmd + 1, 0, PWM_MAX, duty)) {
+      requestedDuty = duty;
+      setDutyFlag = true;
+      if (saveData && logFileOpen) {
+        Serial.println(F("Duty change requested; continuing current log timeline."));
+      } else {
+        Serial.println(F("Duty change requested; logging is not active, so no timeline was changed."));
+        Serial.println(F("Use W#### to set duty and start/restart logging, or L to start a new log."));
+      }
+    } else {
+      Serial.println(F("Invalid duty cycle. Use w0 through w1023, e.g. w512."));
+    }
+    return;
+  }
+
   Serial.print(F("Unknown command: "));
   Serial.println(cmd);
   Serial.println(F("Type h for help."));
@@ -1637,6 +1667,8 @@ static void printStartupDiagnostics() {
   Serial.println(rtcTypeName());
   Serial.print(F("RTC detected: "));
   Serial.println(rtcReady ? F("yes") : F("no"));
+  Serial.print(F("EEPROM compiled: "));
+  Serial.println(THC_HAS_EEPROM ? F("yes") : F("no"));
 #if THC_HAS_RTC
   if (rtcReady) {
     tellRtcTime(Serial);
@@ -1707,10 +1739,19 @@ void setup() {
   checkPinConfiguration();
   serialStartupPace();
 
+#if THC_HAS_EEPROM
   uint8_t storedInterval = intervalIndex;
   if (loadIntervalIndex(storedInterval)) {
     intervalIndex = storedInterval;
+    Serial.print(F("Loaded acquisition interval index from EEPROM: "));
+    Serial.println(intervalIndex);
+  } else {
+    Serial.print(F("No valid EEPROM acquisition interval found; using default index: "));
+    Serial.println(intervalIndex);
   }
+#else
+  Serial.println(F("EEPROM support is not compiled; using default acquisition interval."));
+#endif
   applyAcquisitionInterval(intervalIndex, false);
 
   initHeaters();
